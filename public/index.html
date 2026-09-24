@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carlane Carnage — by Bugbear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#5b7f46; --sign:#0e6a3b; --ink:#ffffff; --warn:#f4c20d; --warn-ink:#161616;
+  box-sizing:border-box; height:100%;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#34502a; --sign:#0b5a32; } }
+:root[data-theme="dark"]{ --bg:#34502a; --sign:#0b5a32; }
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Overpass","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  overflow:hidden; display:flex; align-items:center; justify-content:center;
+  touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+}
+#wrap{position:relative;flex:none;font-size:16px}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.sign{background:var(--sign);border-radius:.6em;padding:.22em;box-shadow:0 .15em 0 rgba(0,0,0,.28)}
+.sign>.in{border:.13em solid var(--ink);border-radius:.45em;padding:.45em .7em}
+#hud{position:absolute;top:.5em;left:.5em;right:.5em;pointer-events:none}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:.8em;font-weight:700;font-size:.92em;line-height:1.35}
+.row span:last-child{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+#merge{position:absolute;right:.5em;top:36%;background:var(--warn);color:var(--warn-ink);border-radius:.45em;padding:.2em;pointer-events:none;text-align:center;box-shadow:0 .15em 0 rgba(0,0,0,.28)}
+#merge .in{border:.12em solid var(--warn-ink);border-radius:.3em;padding:.35em .55em;font-weight:800;line-height:1.1;font-size:.9em}
+#merge b{display:block;font-size:1.7em;font-variant-numeric:tabular-nums;margin-top:.1em}
+#merge.urgent{animation:blink .4s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#merge.urgent{animation:none}}
+#panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%}
+#panel .in{padding:1.1em 1.2em 1.2em}
+#panel h1{font-size:2.3em;line-height:.95;margin:.15em 0 .45em;font-weight:800;letter-spacing:-.01em}
+#panel h2{font-size:1.6em;line-height:1.1;margin:.1em 0 .45em;font-weight:800}
+#panel p{margin:0 0 .7em;line-height:1.4}
+#panel .small{font-size:.85em;opacity:.88}
+#panel .big{font-size:1.3em;font-weight:800;font-variant-numeric:tabular-nums}
+button{font:inherit;font-weight:800;font-size:1.05em;background:var(--ink);color:var(--sign);border:0;border-radius:.4em;padding:.6em 1.1em;margin-top:.3em;cursor:pointer}
+button:focus-visible{outline:.2em solid var(--warn);outline-offset:.15em}
+#snd{position:absolute;left:.5em;bottom:.5em;font-size:.72em;padding:.4em .7em;margin:0;background:var(--sign);color:var(--ink);border:.13em solid var(--ink);box-shadow:0 .15em 0 rgba(0,0,0,.28)}
+[hidden]{display:none!important}
+input{font:inherit;font-weight:700;font-size:1.05em;width:100%;padding:.55em .7em;border:.13em solid var(--ink);border-radius:.4em;background:rgba(0,0,0,.2);color:var(--ink);margin:.2em 0 .5em;-webkit-user-select:text;user-select:text}
+input::placeholder{color:rgba(255,255,255,.6)}
+.plist{list-style:none;margin:0 0 .8em;padding:0;max-height:11em;overflow:auto}
+.plist li{font-weight:700;padding:.25em 0;border-bottom:.06em solid rgba(255,255,255,.25)}
+.plist li i{font-style:normal;font-weight:400;opacity:.8;font-size:.85em}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" aria-label="Game view: top-down road"></canvas>
+  <div id="hud" class="sign"><div class="in">
+    <div class="row"><span>Longest survivor</span><span id="lead">—</span></div>
+    <div class="row"><span id="mineLabel">Your best</span><span id="mine">0:00</span></div>
+  </div></div>
+  <div id="merge" hidden><div class="in"><span id="mergeText">Merge left</span><b id="mergeNum">10</b></div></div>
+  <button id="snd" type="button" aria-pressed="true">Sound on</button>
+  <div id="panel" class="sign"><div class="in" id="panelIn"></div></div>
+</div>
+<script src="peerjs.min.js"></script>
+<script>
+(()=>{
+'use strict';
+
+/* ============ Tunables — change these while playtesting ============ */
+const CFG = {
+  lobbySize: 5,        // total cars including you (spec: 4 → 8 → 16)
+  minLanes: 3, maxLanes: 6,
+  laneWidth: 56,
+  scroll: 210,         // road speed, px per second
+  carSpeed: 250,       // how fast cars move around the road
+  joinWindow: 10,      // seconds on the on-ramp before it starts closing
+  joinGrace: 2,        // seconds while it closes
+  botSkill: [0.55, 0.95],
+};
+
+/* ============ Constants ============ */
+const W=480, H=800, CX=222, LW=CFG.laneWidth, CW=30, CH=52, HW=CW/2, HH=CH/2;
+const EG=6, EW=60, ETOP=330, YMIN=110, YMAX=H-36, TAPER=280;
+const TS_FULL=[0,.2,.4,.6,.8,1,1.2,1.4], TS_PATH=[0,.15];
+const NAMES=[['Amber','#f2a93b'],['Teal','#27a99c'],['Rose','#e8638a'],['Violet','#9474e8'],['Lime','#a6cf3a'],['Coral','#ff8161'],['Sky','#5dbdf2'],['Plum','#b35fb0'],['Sand','#d9b779'],['Mint','#62d4a8'],['Ruby','#d6453d'],['Navy','#4a62c9'],['Gold','#e8c332'],['Moss','#7f9a3d'],['Pink','#f59ac1'],['Iris','#6d7bf0']];
+const TRAFFIC=['#dcd7ca','#9ba2aa','#b9a78c','#707881','#ebe9e3','#a88f74'];
+const PLAYER_COLOR='#2f7fe0', ASPHALT='#46494e', PAINT='#f3f2ec';
+const REASONS={pothole:'Hit a pothole',cone:'Clipped a cone',barrier:'Hit a barrier',car:'Hit traffic',truck:'Hit a truck'};
+
+const rand=(a,b)=>a+Math.random()*(b-a), ri=n=>Math.floor(Math.random()*n);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const hash=n=>{const s=Math.sin(n*12.9898)*43758.5453;return s-Math.floor(s);};
+const fmt=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=ri(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+const cvs=document.getElementById('c'), ctx=cvs.getContext('2d'), wrap=document.getElementById('wrap');
+const $=id=>document.getElementById(id);
+
+/* ============ State ============ */
+let t=0, travel=0, sections=[], obstacles=[], cars=[], parts=[], nextSpawn=H+260;
+let blinkPrev=null;
+const blinkOn=c=>Math.floor(c.joinT/.36)%2===0;
+let mode='lobby', player=null, lastRun=0, deathReason='', panelTimer=0, hudTimer=0;
+// Multiplayer: the host runs the whole simulation; everyone else sends input and draws the host's snapshots.
+let isHost=false, started=false, myId=null, myName='';
+const inp={x:0,y:0};
+let best=0; try{ best=+localStorage.getItem('cc_best')||0; }catch(e){}
+const usedNames=new Set();
+let botSeq=0;
+
+/* ============ Road geometry ============ */
+// distance d is measured along the road; screen y = H - (d - travel)
+const dOf=y=>travel+H-y, yOf=d=>H-(d-travel);
+
+function targetLanes(){
+  const n=Math.max(1,cars.filter(c=>c.state!=='dead').length);
+  return clamp(Math.round(2+n*0.6),CFG.minLanes,CFG.maxLanes);   // more players → wider road
+}
+function extendSections(){
+  while(!sections.length || sections[sections.length-1].end < travel+H+900){
+    const first=!sections.length, s0=first?-1500:sections[sections.length-1].end;
+    let L=targetLanes();
+    if(!first){ const r=Math.random(); if(r<.3) L--; else if(r<.45) L++; }  // occasional squeeze / bonus width
+    L=clamp(L,CFG.minLanes,CFG.maxLanes);
+    sections.push({start:s0,end:s0+(first?3200:rand(1600,3200)),lanes:L});
+  }
+  while(sections.length>1 && sections[0].end<travel-400) sections.shift();
+}
+function findSection(d){
+  for(const s of sections) if(d<s.end) return s;
+  return sections[sections.length-1];
+}
+function lanesAt(d){
+  for(let i=0;i<sections.length;i++){
+    const s=sections[i];
+    if(d<s.end || i===sections.length-1){
+      if(i>0 && d<s.start+TAPER){
+        const p=clamp((d-s.start)/TAPER,0,1), e=p*p*(3-2*p), a=sections[i-1].lanes;
+        return a+(s.lanes-a)*e;
+      }
+      return s.lanes;
+    }
+  }
+  return 4;
+}
+const halfAtY=y=>lanesAt(dOf(y))*LW/2;
+const roadRAt=y=>CX+halfAtY(y);
+
+/* ============ Obstacle patterns ============ */
+function intensity(){ return 0.9+0.3*Math.sin(t/18)+Math.min(0.35,t/900); }
+
+const SZ={pothole:[30,24],cone:[16,16],barrier:[LW*2-10,22],car:[32,58],truck:[36,96]}, TYPES=Object.keys(SZ);
+const TRAFFIC_FWD=0.36;   // all traffic cruises at the same speed, so traffic never piles into traffic
+
+function pickPattern(I){
+  const pats=[['pothole',2],['stagger',2],['block',1.4*I],['barrier',1.4],['mover',1.3],['cones',.8*I],['combo',.8*I]];
+  let r=Math.random()*pats.reduce((a,p)=>a+p[1],0);
+  for(const [n,w] of pats){ if((r-=w)<=0) return n; }
+  return 'pothole';
+}
+
+function buildPattern(p,d,L){
+  const left=CX-L*LW/2, lc=i=>left+LW*(i+.5), out=[];
+  const fwd=CFG.scroll*TRAFFIC_FWD;
+  const veh=()=>Math.random()<.25?'truck':'car';
+  const add=(type,x,dd,o={})=>{
+    const sz=SZ[type], ci=ri(TRAFFIC.length);
+    const ob=Object.assign({type,x,d:dd,w:sz[0],h:sz[1],fwd:0,y:yOf(dd),ci,col:TRAFFIC[ci]},o);
+    if(Math.abs(ob.x-CX)+ob.w/2>lanesAt(dd)*LW/2+1) return;
+    out.push(ob);
+  };
+  switch(p){
+    case 'pothole': add('pothole',lc(ri(L))+rand(-8,8),d); break;
+    case 'stagger': {
+      const ls=shuffle([...Array(L).keys()]).slice(0,Math.min(L-1,2+ri(2)));
+      ls.forEach((ln,k)=>add('pothole',lc(ln)+rand(-8,8),d+k*110)); break;
+    }
+    case 'block': case 'combo': {
+      const g=ri(L); let g2=-1;
+      if(p==='block' && L>=5) g2=(g+2+ri(L-3))%L;
+      for(let i=0;i<L;i++) if(i!==g && i!==g2) add(veh(),lc(i),d+rand(-8,8),{fwd});
+      if(p==='combo') add('pothole',lc(g)+rand(-6,6),d+220);   // the safe gap turns bad
+      break;
+    }
+    case 'barrier': { const a=ri(L-1); add('barrier',left+LW*(a+1),d); break; }
+    case 'mover': {
+      const a=ri(L), b=a===0?1:a===L-1?L-2:a+(Math.random()<.5?-1:1);
+      add(veh(),lc(a),d,{fwd,tx:lc(b),trig:rand(140,380),moved:false});
+      if(L>=4){ const far=a<L/2?L-1:0; add(veh(),lc(far),d+rand(60,140),{fwd}); }
+      break;
+    }
+    case 'cones': {
+      // Work zone: a diagonal taper closes 1–2 lanes on one side, then a cone line holds them shut.
+      const c=(L>=4&&Math.random()<.5)?2:1, side=Math.random()<.5?-1:1;
+      const edgeX=side<0?left+8:left+L*LW-8;
+      const lineX=side<0?left+LW*c:left+LW*(L-c);
+      const n=2*c+1;
+      for(let k=0;k<n;k++) add('cone',edgeX+(lineX-edgeX)*k/(n-1),d+k*45);
+      const d1=d+(n-1)*45;
+      for(let k=1;k<=6;k++) add('cone',lineX,d1+k*60);
+      break;
+    }
+  }
+  return out;
+}
+
+// Look ahead ~8 seconds and reject any pattern that would, at any moment,
+// (1) let traffic drive into another obstacle, or
+// (2) leave some stretch of road without a car-sized gap.
+function passable(cand){
+  const pool=obstacles.filter(o=>o.y>-600&&o.y<H+60).concat(cand);
+  const isNew=new Set(cand);
+  const MARGIN=4, NEED=CW+10, BAND=HH+20;
+  for(let tau=0;tau<=8;tau+=.25){
+    const vis=[];
+    for(const o of pool){
+      const y=o.y+(CFG.scroll-o.fwd)*tau;
+      if(y>-120&&y<H+80) vis.push({o,x:predX(o,tau),y});
+    }
+    if(!vis.some(p=>isNew.has(p.o))) continue;
+    for(let i=0;i<vis.length;i++) for(let j=i+1;j<vis.length;j++){
+      const a=vis[i], b=vis[j];
+      if(!isNew.has(a.o)&&!isNew.has(b.o)) continue;
+      if(!a.o.fwd&&!b.o.fwd) continue;
+      if(Math.abs(a.x-b.x)<(a.o.w+b.o.w)/2+6 && Math.abs(a.y-b.y)<(a.o.h+b.o.h)/2+6) return false;
+    }
+    for(let row=-40;row<=H+40;row+=16){
+      const band=vis.filter(p=>Math.abs(p.y-row)<p.o.h/2+BAND);
+      if(!band.some(p=>isNew.has(p.o))) continue;
+      const half=lanesAt(travel+CFG.scroll*tau+H-row)*LW/2;
+      const iv=band.map(p=>[p.x-p.o.w/2-MARGIN,p.x+p.o.w/2+MARGIN]).sort((a,b)=>a[0]-b[0]);
+      let edge=CX-half+2, gap=0;
+      for(const [a,b] of iv){ gap=Math.max(gap,a-edge); edge=Math.max(edge,b); }
+      gap=Math.max(gap,CX+half-2-edge);
+      if(gap<NEED) return false;
+    }
+  }
+  return true;
+}
+
+function spawnNext(){
+  const d=nextSpawn, s=findSection(d), idx=sections.indexOf(s);
+  if(idx>0 && d<s.start+TAPER+40){ nextSpawn=s.start+TAPER+40; return; }   // keep width changes clear
+  const I=intensity(), L=s.lanes;
+  for(let attempt=0;attempt<10;attempt++){
+    const cand=buildPattern(pickPattern(I),d,L);
+    if(!cand.length) continue;
+    const ext=Math.max(...cand.map(o=>o.d))-d;
+    if(d+ext+500>s.end) continue;
+    if(!passable(cand)) continue;
+    obstacles.push(...cand);
+    nextSpawn=d+ext+rand(250,400)/I;
+    return;
+  }
+  // Nothing fits safely here: skip a little further up the road and try again.
+  nextSpawn=(d+500>s.end)?s.end+TAPER+40:d+90;
+}
+
+function predX(o,t){
+  if(o.tx===undefined) return o.x;
+  let tm=t;
+  if(!o.moved){ const tt=(o.trig-o.y)/(CFG.scroll-o.fwd); if(t<=tt) return o.x; tm=t-tt; }
+  const dx=o.tx-o.x; return o.x+Math.sign(dx)*Math.min(Math.abs(dx),75*tm);
+}
+
+/* ============ Cars ============ */
+function pickName(){
+  const free=NAMES.filter(n=>!usedNames.has(n[0]));
+  const n=free.length?free[ri(free.length)]:['Car '+(1+ri(99)),'#cccccc'];
+  usedNames.add(n[0]); return n;
+}
+function newBot(){
+  const [name,color]=pickName();
+  return {id:'b'+(++botSeq),name,color,isPlayer:false,state:'dead',x:0,y:0,vx:0,vy:0,joinT:0,alive:0,respawnAt:0,bot:freshBrain()};
+}
+function freshBrain(){
+  return {skill:rand(...CFG.botSkill),aggr:Math.random(),prefY:rand(430,670),next:0,tx:0,ty:0,wait:0,cost:0};
+}
+function startJoin(c){
+  for(let k=0;k<12;k++){
+    const y=(k===0&&c.isPlayer)?H-110:rand(ETOP+HH+30,YMAX-10), x=roadRAt(y)+EG+EW/2;
+    const clear=!cars.some(o=>o!==c&&o.state!=='dead'&&Math.abs(o.x-x)<CW+2&&Math.abs(o.y-y)<CH+6);
+    if(clear){
+      Object.assign(c,{state:'joining',x,y,vx:0,vy:0,joinT:0,alive:0});
+      if(c.bot){ c.bot.wait=rand(.5,2); c.bot.next=0; c.bot.tx=x; c.bot.ty=y; }
+      return true;
+    }
+  }
+  return false;
+}
+const squeeze=c=>clamp((c.joinT-CFG.joinWindow)/CFG.joinGrace,0,1);
+
+function xBounds(c,y){
+  const hl=Math.min(halfAtY(y-HH),halfAtY(y+HH)), lo=CX-hl+HW;
+  if(c.state==='joining') return [lo, roadRAt(y)+EG+EW*(1-squeeze(c))-HW];
+  return [lo, CX+hl-HW];
+}
+const yBounds=c=>c.state==='joining'?[ETOP+HH,YMAX]:[YMIN,YMAX];
+
+// Blocking rule: a move is refused only if it creates a NEW overlap with another car.
+function newHit(c,x,y){
+  for(const o of cars){
+    if(o===c||o.state==='dead') continue;
+    if(Math.abs(o.x-x)<CW && Math.abs(o.y-y)<CH && !(Math.abs(o.x-c.x)<CW && Math.abs(o.y-c.y)<CH)) return true;
+  }
+  return false;
+}
+function moveCar(c,dt){
+  let [lo,hi]=xBounds(c,c.y);
+  const nx=clamp(c.x+c.vx*dt,lo,Math.max(lo,hi));
+  if(!newHit(c,nx,c.y)) c.x=nx;
+  const [ylo,yhi]=yBounds(c);
+  const ny=clamp(c.y+c.vy*dt,ylo,yhi);
+  if(!newHit(c,c.x,ny)) c.y=ny;
+  [lo,hi]=xBounds(c,c.y);
+  if(c.state==='active') c.x=clamp(c.x,lo,hi);             // a narrowing road always wins
+  else if(c.x>hi && !newHit(c,hi,c.y)) c.x=hi;              // closing on-ramp nudges you in
+  if(c.state==='joining' && c.x+HW<=roadRAt(c.y)+EG){ c.state='active'; c.alive=0; }
+}
+
+// Sound + debris for a crash (runs on every screen)
+function boom(c){
+  if(c===player) SFX.crash(1); else if(c.y>-40&&c.y<H+40) SFX.crash(.3);
+  for(let i=0;i<22;i++){
+    const a=Math.random()*Math.PI*2, s=rand(60,260);
+    parts.push({x:c.x,y:c.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(.4,.9),col:i%3?c.color:'#ffb347'});
+  }
+}
+function crash(c,reason){
+  c.lastRun=c.state==='active'?c.alive:0; c.reason=reason;
+  c.state='dead';
+  boom(c);
+  if(!c.isPlayer){
+    usedNames.delete(c.name);
+    c.respawnAt=t+rand(1.5,4);
+  }
+}
+function checkCrash(c){
+  for(const o of obstacles){
+    const sx=o.type==='pothole'?6:3, sy=o.type==='pothole'?6:4;
+    if(Math.abs(o.x-c.x)<o.w/2+HW-sx && Math.abs(o.y-c.y)<o.h/2+HH-sy){ crash(c,REASONS[o.type]); return; }
+  }
+  if(c.state==='joining' && c.joinT>CFG.joinWindow+CFG.joinGrace) crash(c,'The on-ramp ran out');
+}
+
+/* ============ Bot brain ============ */
+function hazard(obs,px,py,t0,ts){
+  let c=0;
+  for(const o of obs){
+    const rel=CFG.scroll-o.fwd;
+    if(o.y-o.h/2-HH-10>py) continue;                                   // already passed
+    if(o.y+rel*(t0+ts[ts.length-1])+o.h/2+HH+10<py) continue;          // won't arrive in time
+    for(const dt of ts){
+      const tt=t0+dt, oy=o.y+rel*tt, ox=predX(o,tt);
+      if(Math.abs(ox-px)<o.w/2+HW+5 && Math.abs(oy-py)<o.h/2+HH+6){ c+=10/(1+tt); break; }
+    }
+  }
+  return c;
+}
+function botThink(c){
+  const b=c.bot, sp=CFG.carSpeed*(.8+.2*b.skill);
+  const look=TS_FULL.slice(0,3+Math.round(b.skill*5));
+  const obs=obstacles.filter(o=>o.y>-450&&o.y<H+80);
+  const others=cars.filter(o=>o!==c&&o.state!=='dead');
+  const joiners=others.filter(o=>o.state==='joining');
+  let best=null, bestCost=1e9;
+  const tryCand=(px,py,extra)=>{
+    const dist=Math.hypot(px-c.x,py-c.y), ta=dist/sp;
+    let cost=extra;
+    cost+=0.8*hazard(obs,c.x+(px-c.x)*.33,c.y+(py-c.y)*.33,ta*.33,TS_PATH);
+    cost+=0.8*hazard(obs,c.x+(px-c.x)*.66,c.y+(py-c.y)*.66,ta*.66,TS_PATH);
+    cost+=hazard(obs,px,py,ta,look);
+    const half=lanesAt(travel+CFG.scroll*(ta+.8)+H-py)*LW/2;
+    if(Math.abs(px-CX)>half-HW+1) cost+=6;                              // road narrowing ahead
+    for(const o of others){
+      const dx=Math.abs(o.x-px), dy=Math.abs(o.y-py);
+      if(dx<CW+4&&dy<CH+4) cost+=o.state==='active'?5:3;
+      else if(dx<CW+20&&dy<CH+20) cost+=.6;
+    }
+    cost+=dist*.005+Math.abs(py-b.prefY)*.006+Math.random()*(1-b.skill)*4;
+    if(cost<bestCost){bestCost=cost;best=[px,py];}
+  };
+  if(c.state==='active'){
+    const ys=[c.y-150,c.y-75,c.y,c.y+75,c.y+150,b.prefY].map(v=>clamp(v,YMIN,YMAX));
+    for(const py of ys){
+      const hl=Math.min(halfAtY(py-HH),halfAtY(py+HH)), lo=CX-hl+HW, hi=CX+hl-HW;
+      for(let px=lo;px<=hi+.1;px+=12){
+        let extra=0;
+        for(const j of joiners)                                          // aggressive bots guard the merge
+          if(Math.abs(py-j.y)<45 && px>roadRAt(py)-HW-14) extra-=b.aggr*2.5;
+        if(player&&player.state==='active'&&Math.abs(px-player.x)<20&&py<player.y-40&&py>player.y-100) extra-=b.aggr*1.2;
+        tryCand(px,py,extra);
+      }
+    }
+    tryCand(c.x,c.y,-.4);                                                // mild preference to stay put
+  } else {
+    for(let py=ETOP+HH+4;py<=YMAX;py+=24) tryCand(roadRAt(py)-HW-6,py,0);
+  }
+  b.tx=best[0]; b.ty=best[1]; b.cost=bestCost;
+}
+function updateBot(c,dt){
+  const b=c.bot;
+  b.next-=dt;
+  if(b.next<=0){ botThink(c); b.next=.09+(1-b.skill)*.22+rand(0,.05); }
+  const sp=CFG.carSpeed*(.8+.2*b.skill);
+  if(c.state==='joining'){
+    b.wait-=dt;
+    const ex=roadRAt(c.y)+EG+EW/2, dy=b.ty-c.y;
+    const ready=b.wait<=0 && (b.cost<3.5 || c.joinT>CFG.joinWindow-1.5);
+    c.vy=clamp(dy*6,-sp,sp);
+    c.vx=(ready&&Math.abs(dy)<14)?-sp:clamp((ex-c.x)*6,-sp,sp);
+    return;
+  }
+  const dx=b.tx-c.x, dy=b.ty-c.y, d=Math.hypot(dx,dy);
+  if(d<2){c.vx=c.vy=0;return;}
+  const s=Math.min(sp,d*7); c.vx=dx/d*s; c.vy=dy/d*s;
+}
+
+/* ============ Sound — synthesised live with Web Audio, no audio files ============ */
+const SFX=(()=>{
+  let ac=null, master=null, noiseBuf=null, eng=null, muted=false;
+  const last=new Map();
+  let lastDir=0, lastWhoosh=0;
+  try{ muted=localStorage.getItem('cc_mute')==='1'; }catch(e){}
+
+  function init(){
+    if(ac){ if(ac.state==='suspended'&&!muted&&!document.hidden) ac.resume(); return; }
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    ac=new AC();
+    const comp=ac.createDynamicsCompressor(); comp.connect(ac.destination);
+    master=ac.createGain(); master.gain.value=muted?0:.9; master.connect(comp);
+    noiseBuf=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate);
+    const ch=noiseBuf.getChannelData(0); for(let i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
+    const loopNoise=()=>{ const s=ac.createBufferSource(); s.buffer=noiseBuf; s.loop=true; s.start(); return s; };
+
+    // Engine: saw + sub-octave square through a resonant low-pass, with a little idle lope
+    const o1=ac.createOscillator(); o1.type='sawtooth'; o1.frequency.value=50;
+    const o2=ac.createOscillator(); o2.type='square'; o2.frequency.value=25;
+    const g2=ac.createGain(); g2.gain.value=.5;
+    const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=480; lp.Q.value=4;
+    const eg=ac.createGain(); eg.gain.value=0;
+    const lfo=ac.createOscillator(); lfo.frequency.value=9;
+    const lfoG=ac.createGain(); lfoG.gain.value=0;
+    lfo.connect(lfoG); lfoG.connect(eg.gain);
+    o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(eg); eg.connect(master);
+    o1.start(); o2.start(); lfo.start();
+
+    // Steering: soft low tyre-on-asphalt rumble (plus a one-shot whoosh when you start or reverse a lane change)
+    const sn=loopNoise(), sbp=ac.createBiquadFilter(); sbp.type='lowpass'; sbp.frequency.value=380; sbp.Q.value=.7;
+    const sg=ac.createGain(); sg.gain.value=0; sn.connect(sbp); sbp.connect(sg); sg.connect(master);
+
+    // Brakes: narrow noise hiss plus a wobbling squeal
+    const bn=loopNoise(), bbp=ac.createBiquadFilter(); bbp.type='bandpass'; bbp.frequency.value=3300; bbp.Q.value=9;
+    const bg=ac.createGain(); bg.gain.value=0; bn.connect(bbp); bbp.connect(bg);
+    const sq=ac.createOscillator(); sq.type='triangle'; sq.frequency.value=2650;
+    const vib=ac.createOscillator(); vib.frequency.value=13; const vibG=ac.createGain(); vibG.gain.value=35;
+    vib.connect(vibG); vibG.connect(sq.frequency);
+    const sqG=ac.createGain(); sqG.gain.value=.3; sq.connect(sqG); sqG.connect(bg);
+    sq.start(); vib.start(); bg.connect(master);
+
+    eng={o1,o2,lp,eg,lfoG,sg,sbp,bg};
+  }
+  const set=(p,v,tau)=>{ if(last.get(p)!==v){ p.setTargetAtTime(v,ac.currentTime,tau); last.set(p,v); } };
+
+  // Called every frame with the player's steering input
+  function drive(alive,ix,iy){
+    if(!eng) return;
+    const up=iy<-.2, down=iy>.2, lat=Math.abs(ix)>.2;
+    const f=!alive?40: up?98: down?38: 50;
+    set(eng.o1.frequency,f,up?.35:.2); set(eng.o2.frequency,f/2,up?.35:.2);
+    set(eng.lp.frequency,!alive?300: up?1500: down?360: 480,.2);
+    set(eng.eg.gain,!alive?0: up?.2: .13,.12);
+    set(eng.lfoG.gain,!alive?0: up?.015: .035,.2);
+    set(eng.sg.gain,alive&&lat?.07:0,.08);
+    set(eng.sbp.frequency,up?520:380,.2);
+    const dir=lat?Math.sign(ix):0;
+    if(alive&&dir!==0&&dir!==lastDir&&ac.currentTime-lastWhoosh>.25){ whoosh(); lastWhoosh=ac.currentTime; }
+    lastDir=dir;
+    set(eng.bg.gain,alive&&down?.05:0,.07);
+  }
+
+  function env(g,t0,peak,dur,atk=.005){
+    g.gain.setValueAtTime(.0001,t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(.0002,peak),t0+atk);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  }
+  function blip(freq,dur,vol,type='square',at=0){
+    if(!ac||muted) return;
+    const t0=ac.currentTime+at, o=ac.createOscillator(), g=ac.createGain();
+    o.type=type; o.frequency.value=freq; env(g,t0,vol,dur);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+.03);
+    return {o,t0};
+  }
+  function burst(dur,vol,type,freq,at=0,atk=.005){
+    if(!ac||muted) return;
+    const t0=ac.currentTime+at, s=ac.createBufferSource(), f=ac.createBiquadFilter(), g=ac.createGain();
+    s.buffer=noiseBuf; f.type=type; f.frequency.value=freq; env(g,t0,vol,dur,atk);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t0,Math.random()); s.stop(t0+dur+.03);
+    return {f,t0};
+  }
+
+  function whoosh(){
+    const w=burst(.34,.13,'bandpass',300,0,.09);
+    if(w){ w.f.Q.value=1.6; w.f.frequency.setValueAtTime(300,w.t0); w.f.frequency.exponentialRampToValueAtTime(1000,w.t0+.13); w.f.frequency.exponentialRampToValueAtTime(320,w.t0+.33); }
+  }
+  const tick=()=>{ burst(.012,.35,'highpass',2500); blip(1500,.02,.12); };
+  const tock=()=>{ burst(.012,.3,'highpass',2000); blip(1150,.02,.1); };
+  // Stalk snapping back when you complete the merge
+  const cancel=()=>{ burst(.02,.5,'bandpass',1400); blip(820,.035,.15); burst(.014,.32,'highpass',2300,.05); };
+
+  function crash(vol){
+    if(!ac||muted) return;
+    const n=burst(.9,.9*vol,'lowpass',3500);
+    if(n){ n.f.frequency.setValueAtTime(3500,n.t0); n.f.frequency.exponentialRampToValueAtTime(180,n.t0+.7); }
+    const th=blip(150,.45,.9*vol,'sine');
+    if(th){ th.o.frequency.setValueAtTime(150,th.t0); th.o.frequency.exponentialRampToValueAtTime(38,th.t0+.35); }
+    burst(.25,.5*vol,'bandpass',600,.02);                                   // metal crunch
+    for(let i=0;i<5;i++) blip(rand(2400,5200),.07,.06*vol,'sine',rand(.05,.38));  // glass
+  }
+
+  function setMuted(m){
+    muted=m; try{localStorage.setItem('cc_mute',m?'1':'0');}catch(e){}
+    if(master) master.gain.setTargetAtTime(m?0:.9,ac.currentTime,.05);
+    if(!m) init();
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(!ac) return;
+    if(document.hidden) ac.suspend(); else if(!muted) ac.resume();
+  });
+  return {init,drive,tick,tock,cancel,crash,setMuted,get muted(){return muted;}};
+})();
+
+/* ============ Input ============ */
+const keys=new Set();
+const touch={active:false,ox:0,oy:0,x:0,y:0,vx:0,vy:0};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys.add(e.key.toLowerCase());
+  if((e.key==='Enter'||e.key===' ') && !$('panel').hidden){ const btn=$('panel').querySelector('button'); if(btn) btn.click(); }
+});
+addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+addEventListener('blur',()=>keys.clear());
+const toCanvas=e=>{const r=cvs.getBoundingClientRect();return [(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];};
+wrap.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button,input')) return;
+  const [x,y]=toCanvas(e); Object.assign(touch,{active:true,ox:x,oy:y,x,y,vx:0,vy:0});
+  try{wrap.setPointerCapture(e.pointerId);}catch(_){}
+});
+wrap.addEventListener('pointermove',e=>{
+  if(!touch.active) return;
+  const [x,y]=toCanvas(e); touch.x=x; touch.y=y;
+  const dx=x-touch.ox, dy=y-touch.oy, m=Math.hypot(dx,dy);
+  if(m<8){touch.vx=touch.vy=0;return;}
+  const k=Math.min(1,m/45)/m; touch.vx=dx*k; touch.vy=dy*k;
+});
+const endTouch=()=>{touch.active=false;touch.vx=touch.vy=0;};
+wrap.addEventListener('pointerup',endTouch); wrap.addEventListener('pointercancel',endTouch);
+
+function readInput(){
+  let ix=0,iy=0;
+  if(keys.has('arrowleft')||keys.has('a')) ix--;
+  if(keys.has('arrowright')||keys.has('d')) ix++;
+  if(keys.has('arrowup')||keys.has('w')) iy--;
+  if(keys.has('arrowdown')||keys.has('s')) iy++;
+  if(touch.active){ ix+=touch.vx; iy+=touch.vy; }
+  const m=Math.hypot(ix,iy); if(m>1){ix/=m;iy/=m;}
+  inp.x=Math.round(ix*100)/100; inp.y=Math.round(iy*100)/100;
+}
+function updatePlayer(c){   // any human car; remote humans' ix/iy arrive over the network
+  const ix=c.ix||0, iy=c.iy||0;
+  c.vx=ix*CFG.carSpeed; c.vy=iy*CFG.carSpeed;
+}
+
+/* ============ Panels ============ */
+function showPanel(html,label,onClick){
+  $('panelIn').innerHTML=html+`<button type="button">${label}</button>`;
+  $('panel').hidden=false;
+  const b=$('panel').querySelector('button');
+  b.addEventListener('click',()=>{ $('panel').hidden=true; onClick(); });
+  b.focus({preventScroll:true});
+}
+function titlePanel(){
+  showPanel(`<h1>Carlane Carnage</h1>
+    <p>Stay on the road longer than everyone else. Nobody can hit you, but anyone can take your space.</p>
+    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. You join from the on-ramp on the right: merge left before it ends. Press M to mute.</p>`,
+    'Join the road', joinGame);
+}
+function deathPanel(){
+  showPanel(`<h2>${deathReason}</h2>
+    <p>You survived <span class="big">${fmt(lastRun)}</span></p>
+    <p class="small">Your best is ${fmt(best)}. The road kept going without you.</p>`,
+    'Rejoin', joinGame);
+}
+function joinGame(){
+  mode='playing';
+  if(isHost){ if(player) player.pending=true; } else send({t:'join'});
+}
+const esc=s=>String(s).replace(/[&<>"']/g,ch=>'&#'+ch.charCodeAt(0)+';');
+const BYLINE='<p class="small">A game by <b>Bugbear</b></p>';
+function namePanel(status){
+  $('panelIn').innerHTML=`<h1>Carlane Carnage</h1>${BYLINE}
+    <form id="nameForm"><input id="nameIn" maxlength="14" placeholder="Your name" autocomplete="off" required>
+    <button type="submit">Enter lobby</button></form><p class="small" id="status">${status||''}</p>`;
+  $('panel').hidden=false;
+  const i=$('nameIn'); try{ i.value=localStorage.getItem('cc_name')||''; }catch(e){}
+  i.focus({preventScroll:true});
+  $('nameForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    myName=i.value.trim().slice(0,14); if(!myName) return;
+    try{ localStorage.setItem('cc_name',myName); }catch(e){}
+    i.disabled=true; e.target.querySelector('button').disabled=true;
+    connect();
+  });
+}
+const setStatus=m=>{ const s=$('status'); if(s) s.textContent=m; };
+let lobbyList=[];   // [{id,name}], first is the host
+function lobbyPanel(){
+  if(mode!=='lobby') return;
+  const host=lobbyList[0];
+  $('panelIn').innerHTML=`<h1>Carlane Carnage</h1>${BYLINE}
+    <h2>Waiting lobby</h2>
+    <ul class="plist">${lobbyList.map((p,i)=>`<li>${esc(p.name)} ${i===0?'<i>(host)</i>':''} ${p.id===myId?'<i>(you)</i>':''}</li>`).join('')}</ul>
+    ${isHost?'<p class="small">Share this page\'s link. Start when everyone is in.</p><button type="button" id="startBtn">Start</button>'
+            :`<p class="small">Waiting for ${esc(host?host.name:'the host')} to start…</p>`}`;
+  $('panel').hidden=false;
+  const b=$('startBtn'); if(b){ b.addEventListener('click',startGame); b.focus({preventScroll:true}); }
+}
+function enterGame(){ if(mode==='lobby'){ mode='title'; titlePanel(); } }
+function hostGone(){
+  if(isHost||mode==='gone') return;
+  mode='gone'; cars=[]; player=null;
+  showPanel('<h2>The host left</h2><p>The game ended because the host closed their page.</p>','Back to lobby',()=>location.reload());
+}
+
+/* ============ Update ============ */
+function update(dt){
+  t+=dt; travel+=CFG.scroll*dt;
+  extendSections();
+  while(nextSpawn<travel+H+140){ const b=nextSpawn; spawnNext(); if(nextSpawn===b) break; }
+  moveObstacles(dt);
+
+  for(const c of cars) if(c.isPlayer&&c.pending&&c.state==='dead'&&startJoin(c)) c.pending=false;
+
+  for(const c of cars){
+    if(c.state==='dead'){
+      if(!c.isPlayer && t>=c.respawnAt){
+        const [n,col]=pickName(); c.name=n; c.color=col; c.bot=freshBrain();   // a new player takes the slot
+        if(!startJoin(c)){ usedNames.delete(n); c.respawnAt=t+.5; }
+      }
+      continue;
+    }
+    if(c.isPlayer) updatePlayer(c); else updateBot(c,dt);
+  }
+  for(const c of cars) if(c.state!=='dead') moveCar(c,dt);
+  for(const c of cars){
+    if(c.state==='dead') continue;
+    if(c.state==='active') c.alive+=dt; else c.joinT+=dt;
+    checkCrash(c);
+  }
+  tickEffects(dt);
+}
+function moveObstacles(dt){
+  for(const o of obstacles){
+    o.d+=o.fwd*dt; o.y=yOf(o.d);
+    if(o.tx!==undefined){
+      if(!o.moved && o.y>o.trig) o.moved=true;
+      if(o.moved){ const dx=o.tx-o.x; o.x+=Math.sign(dx)*Math.min(Math.abs(dx),75*dt); }
+    }
+    if(o.fwd){ const lim=lanesAt(o.d)*LW/2-o.w/2-2; o.x=clamp(o.x,CX-lim,CX+lim); }
+  }
+  obstacles=obstacles.filter(o=>o.y<H+140);
+}
+// Client side: glide everything forward between host snapshots
+function extrapolate(dt){
+  t+=dt; travel+=CFG.scroll*dt;
+  moveObstacles(dt);
+  for(const c of cars){
+    if(c.state==='dead') continue;
+    c.x+=c.vx*dt; c.y+=c.vy*dt;
+    if(c.state==='active') c.alive+=dt; else c.joinT+=dt;
+  }
+  tickEffects(dt);
+}
+function tickEffects(dt){
+  if(player&&player.state==='joining'){
+    const on=blinkOn(player);
+    if(on!==blinkPrev){ on?SFX.tick():SFX.tock(); blinkPrev=on; }
+  } else blinkPrev=null;
+  for(const p of parts){ p.x+=p.vx*dt; p.y+=(p.vy+CFG.scroll*.6)*dt; p.vx*=.96; p.vy*=.96; p.life-=dt; }
+  parts=parts.filter(p=>p.life>0);
+}
+// Watch my own car (host or client) for merge / crash moments
+let myPrev=null;
+function watchMe(dt){
+  const s=player?player.state:null;
+  if(myPrev==='joining'&&s==='active') SFX.cancel();
+  if(myPrev&&myPrev!=='dead'&&s==='dead'&&mode==='playing'){
+    lastRun=player.lastRun||0; deathReason=player.reason||'Crashed'; mode='dead'; panelTimer=0.9;
+    if(lastRun>best){ best=lastRun; try{localStorage.setItem('cc_best',String(best));}catch(e){} }
+  }
+  myPrev=s;
+  if(mode==='dead' && panelTimer>0){ panelTimer-=dt; if(panelTimer<=0) deathPanel(); }
+}
+
+/* ============ Drawing ============ */
+function rr(x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawRoad(){
+  ctx.fillStyle='#5b7f46'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#4d6f3b';
+  for(let d=Math.floor((travel-60)/48)*48; d<travel+H+60; d+=48){
+    const y=yOf(d), hl=lanesAt(d)*LW/2;
+    for(let k=0;k<3;k++){
+      const h=hash(d*.37+k*7.1), side=hash(d*.11+k)<.5;
+      const x=side? h*(CX-hl-24) : CX+hl+80+h*(W-(CX+hl+80));
+      ctx.fillRect(x,y+k*14,3,7); ctx.fillRect(x+4,y+k*14+2,3,6);
+    }
+  }
+  const poly=(extra,col)=>{
+    ctx.fillStyle=col; ctx.beginPath();
+    for(let y=-20;y<=H+20;y+=10) ctx.lineTo(CX-halfAtY(y)-extra,y);
+    for(let y=H+20;y>=-20;y-=10) ctx.lineTo(CX+halfAtY(y)+extra,y);
+    ctx.closePath(); ctx.fill();
+  };
+  poly(10,'#8c8a80'); poly(0,ASPHALT);
+}
+function drawRoadLines(){
+  ctx.strokeStyle=PAINT; ctx.lineWidth=3;
+  const rampOpen=cars.some(c=>c.state==='joining');
+  for(const s of [-1,1]){
+    ctx.beginPath();
+    const yEnd=(s===1&&rampOpen)?ETOP-40:H+20;   // the merge edge is open while someone is joining
+    for(let y=-20;y<=yEnd;y+=10) ctx.lineTo(CX+s*(halfAtY(y)-4),y);
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(243,242,236,.75)';
+  for(let d=Math.floor(travel/64)*64; d<travel+H+64; d+=64){
+    const L=lanesAt(d); if(Math.abs(L-Math.round(L))>.001) continue;
+    const y=yOf(d), left=CX-L*LW/2;
+    for(let k=1;k<L;k++) ctx.fillRect(left+LW*k-1.5,y-16,3,32);
+  }
+}
+function drawEntry(){
+  const joiners=cars.filter(c=>c.state==='joining'); if(!joiners.length) return;
+  const w=EW*(1-Math.max(...joiners.map(squeeze))), top=ETOP-80;
+  const k=y=>y<ETOP?(y-top)/80:1;
+  ctx.fillStyle=ASPHALT; ctx.beginPath();
+  for(let y=top;y<=H+20;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y),y);
+  for(let y=H+20;y>=top;y-=10) ctx.lineTo(roadRAt(y)-3,y);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=PAINT; ctx.lineWidth=3; ctx.beginPath();
+  for(let y=top;y<=H+20;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y)-3,y);
+  ctx.stroke();
+  ctx.fillStyle='rgba(243,242,236,.8)';
+  const off=(travel%28);
+  for(let y=ETOP+off-28;y<H+20;y+=28) if(y>ETOP-10) ctx.fillRect(roadRAt(y)+EG/2-1.5,y,3,12);
+  if(w>24){
+    const ax=roadRAt(ETOP+40)+EG+w/2, ay=ETOP+40;
+    ctx.fillStyle='rgba(243,242,236,.7)'; ctx.beginPath();
+    ctx.moveTo(ax-10,ay-14); ctx.lineTo(ax+4,ay-14); ctx.lineTo(ax-1,ay-9); ctx.lineTo(ax+8,ay); ctx.lineTo(ax+3,ay+5);
+    ctx.lineTo(ax-6,ay-4); ctx.lineTo(ax-10,ay); ctx.closePath(); ctx.fill();
+  }
+}
+function drawObstacle(o){
+  const {x,y,w,h}=o;
+  if(y<-120||y>H+120) return;
+  if(o.type==='pothole'){
+    ctx.fillStyle='#2a2b2e'; ctx.beginPath(); ctx.ellipse(x,y,w/2,h/2,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#6b6d70'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#1c1d1f'; ctx.beginPath(); ctx.ellipse(x+2,y+1,w/3.2,h/3.4,0,0,Math.PI*2); ctx.fill();
+  } else if(o.type==='cone'){
+    ctx.fillStyle='#b8520f'; rr(x-8,y-8,16,16,3); ctx.fill();
+    ctx.fillStyle='#ff8a1f'; ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.stroke();
+  } else if(o.type==='barrier'){
+    ctx.save(); rr(x-w/2,y-h/2,w,h,3); ctx.clip();
+    ctx.fillStyle='#f5f3ee'; ctx.fillRect(x-w/2,y-h/2,w,h);
+    ctx.fillStyle='#ef6c16';
+    for(let i=-w;i<w;i+=16){ ctx.beginPath(); ctx.moveTo(x-w/2+i,y+h/2); ctx.lineTo(x-w/2+i+8,y+h/2); ctx.lineTo(x-w/2+i+8+h,y-h/2); ctx.lineTo(x-w/2+i+h,y-h/2); ctx.fill(); }
+    ctx.restore();
+  } else {
+    ctx.fillStyle='rgba(0,0,0,.25)'; rr(x-w/2+2,y-h/2+3,w,h,6); ctx.fill();
+    if(o.type==='truck'){
+      ctx.fillStyle=o.col; rr(x-w/2,y-h/2,w,24,5); ctx.fill();
+      ctx.fillStyle='#2b3036'; rr(x-w/2+4,y-h/2+4,w-8,8,2); ctx.fill();
+      ctx.fillStyle='#cfcac0'; rr(x-w/2,y-h/2+27,w,h-27,3); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.15)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y-h/2+30); ctx.lineTo(x,y+h/2-3); ctx.stroke();
+    } else {
+      ctx.fillStyle=o.col; rr(x-w/2,y-h/2,w,h,7); ctx.fill();
+      ctx.fillStyle='#2b3036'; rr(x-w/2+4,y-h/2+10,w-8,11,3); ctx.fill(); rr(x-w/2+4,y+h/2-14,w-8,7,3); ctx.fill();
+    }
+    if(o.tx!==undefined && Math.abs(o.tx-o.x)>1 && o.y>o.trig-190 && Math.floor(t*6)%2===0){
+      const s=Math.sign(o.tx-o.x); ctx.fillStyle='#ffb300';
+      ctx.fillRect(x+s*(w/2)-(s>0?4:0),y-h/2+2,4,6); ctx.fillRect(x+s*(w/2)-(s>0?4:0),y+h/2-8,4,6);
+    }
+  }
+}
+function drawStar(x,y,r){
+  ctx.beginPath();
+  for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rad=i%2?r*.45:r; ctx.lineTo(x+Math.cos(a)*rad,y+Math.sin(a)*rad); }
+  ctx.closePath(); ctx.fill();
+}
+function drawCar(c,leader){
+  const {x,y}=c, w=CW, h=CH;
+  ctx.fillStyle='rgba(0,0,0,.28)'; rr(x-w/2+2,y-h/2+3,w,h,7); ctx.fill();
+  ctx.fillStyle=c.color; rr(x-w/2,y-h/2,w,h,7); ctx.fill();
+  ctx.fillStyle='#1f2a36'; rr(x-w/2+4,y-h/2+10,w-8,11,3); ctx.fill(); rr(x-w/2+4,y+h/2-14,w-8,7,3); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.2)'; rr(x-w/2+5,y-h/2+23,w-10,h-39,3); ctx.fill();
+  ctx.fillStyle='#fff6c8'; ctx.fillRect(x-w/2+3,y-h/2+1,5,3); ctx.fillRect(x+w/2-8,y-h/2+1,5,3);
+  if(c.vy>60){                                              // brake lights
+    ctx.fillStyle='rgba(255,40,30,.35)'; ctx.beginPath(); ctx.arc(x-w/2+5,y+h/2-2,6,0,Math.PI*2); ctx.arc(x+w/2-5,y+h/2-2,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff3b30'; ctx.fillRect(x-w/2+2,y+h/2-4,6,3); ctx.fillRect(x+w/2-8,y+h/2-4,6,3);
+  }
+  if(c.state==='joining' && blinkOn(c)){                     // left indicator while merging
+    ctx.fillStyle='rgba(255,179,0,.4)'; ctx.beginPath(); ctx.arc(x-w/2+2,y-h/2+5,7,0,Math.PI*2); ctx.arc(x-w/2+2,y+h/2-5,7,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ffb300'; ctx.fillRect(x-w/2-1,y-h/2+2,5,6); ctx.fillRect(x-w/2-1,y+h/2-8,5,6);
+  }
+  if(c===player){ ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; rr(x-w/2-3,y-h/2-3,w+6,h+6,9); ctx.stroke(); }
+  if(c.state==='joining'){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2; ctx.setLineDash([5,4]); rr(x-w/2-6,y-h/2-6,w+12,h+12,10); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.font='800 11px Overpass, Arial, sans-serif'; ctx.textAlign='center';
+  const label=c.name, ly=y-h/2-(c===player?9:6);
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(label,x+1,ly+1);
+  ctx.fillStyle='#fff'; ctx.fillText(label,x,ly);
+  if(leader){ ctx.fillStyle='#f4c20d'; drawStar(x,ly-15,6.5); }
+}
+function render(){
+  drawRoad(); drawEntry(); drawRoadLines();
+  for(const o of obstacles) if(o.type==='pothole'||o.type==='cone'||o.type==='barrier') drawObstacle(o);
+  for(const o of obstacles) if(o.type==='car'||o.type==='truck') drawObstacle(o);
+  const lead=leader();
+  for(const c of cars) if(c.state!=='dead'&&c!==player) drawCar(c,c===lead);
+  if(player&&player.state!=='dead') drawCar(player,player===lead);
+  for(const p of parts){ ctx.globalAlpha=clamp(p.life*1.6,0,1); ctx.fillStyle=p.col; ctx.fillRect(p.x-3,p.y-3,6,6); }
+  ctx.globalAlpha=1;
+  if(touch.active && $('panel').hidden){
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(touch.ox,touch.oy,45,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath();
+    ctx.arc(touch.ox+touch.vx*45,touch.oy+touch.vy*45,14,0,Math.PI*2); ctx.fill();
+  }
+}
+function leader(){
+  let b=null; for(const c of cars) if(c.state==='active'&&c.alive>3&&(!b||c.alive>b.alive)) b=c;
+  return b;
+}
+function updateHud(){
+  const l=leader(); $('lead').textContent=l?`${l.name} ${fmt(l.alive)}`:'—';
+  if(player&&player.state==='active'){ $('mineLabel').textContent='Your time'; $('mine').textContent=fmt(player.alive); }
+  else { $('mineLabel').textContent='Your best'; $('mine').textContent=fmt(best); }
+  const m=$('merge');
+  if(player&&player.state==='joining'){
+    m.hidden=false;
+    const rem=CFG.joinWindow-player.joinT;
+    if(rem>0){ $('mergeText').textContent='Merge left'; $('mergeNum').textContent=Math.ceil(rem); m.classList.remove('urgent'); }
+    else { $('mergeText').textContent='Ramp ending'; $('mergeNum').textContent=Math.max(0,Math.ceil(rem+CFG.joinGrace)); m.classList.add('urgent'); }
+  } else m.hidden=true;
+}
+
+/* ============ Boot ============ */
+let scaleK=1;
+function resize(){
+  const aw=document.body.clientWidth, ah=document.body.clientHeight;
+  const s=Math.min(aw/W,ah/H), cw=Math.floor(W*s), ch=Math.floor(H*s);
+  wrap.style.width=cw+'px'; wrap.style.height=ch+'px'; wrap.style.fontSize=Math.max(11,16*s)+'px';
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cvs.width=Math.round(cw*dpr); cvs.height=Math.round(ch*dpr); scaleK=cw/W*dpr;
+}
+addEventListener('resize',resize); resize();
+
+/* ============ Multiplayer (PeerJS, host-authoritative) ============ */
+// Everyone on the same link shares one room. The first visitor to claim the room id becomes the host.
+// Add #something to the URL for a separate room (e.g. /#friday).
+const ROOM='bugbear-carlane-carnage-'+(location.hash.slice(1).toLowerCase().replace(/[^a-z0-9]/g,'')||'main');
+const HUMAN_COLORS=[PLAYER_COLOR,'#e0398b','#16b6c9','#f07a1a','#8e4dff','#1fc26b','#ffd23f','#ff4d4d','#ffffff','#7a5230'];
+const peers=new Map();   // host only: peerId -> {conn, car, seen}
+let peer=null, hostConn=null, attempt=0, lastSnap=0, snapSeq=0, gotSeq=-1;
+
+const send=m=>{ if(hostConn&&hostConn.open) try{ hostConn.send(m); }catch(e){} };
+function broadcast(m){ for(const h of peers.values()) if(h.conn.open) try{ h.conn.send(m); }catch(e){} }
+
+function connect(){
+  const my=++attempt;
+  if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
+  setStatus(my>2?'Still trying to connect…':'Connecting…');
+  const retry=ms=>setTimeout(()=>{ if(my===attempt&&!isHost&&mode!=='gone') connect(); },ms);
+  const p=peer=new Peer(ROOM,{debug:0});
+  p.on('open',()=>{ if(my===attempt) becomeHost(p); });
+  p.on('error',e=>{
+    if(my!==attempt||isHost) return;
+    try{ p.destroy(); }catch(_){}
+    if(e.type==='unavailable-id') joinAsClient(my,retry);   // someone is already hosting
+    else { setStatus('Connection problem, retrying…'); retry(2500); }
+  });
+}
+function joinAsClient(my,retry){
+  const p=peer=new Peer({debug:0});
+  p.on('open',id=>{
+    if(my!==attempt) return;
+    myId=id;
+    const c=p.connect(ROOM,{serialization:'json'});
+    const to=setTimeout(()=>{ if(!hostConn){ try{ p.destroy(); }catch(_){} retry(0); } },9000);
+    c.on('open',()=>{ if(my!==attempt) return; clearTimeout(to); hostConn=c; lastSnap=performance.now(); c.send({t:'hello',name:myName}); setStatus('Joined. Waiting for the lobby…'); });
+    c.on('data',onHostData);
+    c.on('close',()=>{ if(hostConn===c) hostGone(); });
+    c.on('error',()=>{});
+  });
+  p.on('error',e=>{
+    if(my!==attempt||hostConn) return;
+    try{ p.destroy(); }catch(_){}
+    retry(e.type==='peer-unavailable'?300:2500);   // host vanished: we may become the host now
+  });
+}
+
+/* ---- host side ---- */
+function becomeHost(p){
+  isHost=true; myId=ROOM;
+  // The road is already running when you arrive.
+  for(let i=0;i<CFG.lobbySize-1;i++){
+    const c=newBot(); cars.push(c);
+    if(i<3){ Object.assign(c,{state:'active',x:CX+(i-1)*LW*1.4,y:rand(470,650),alive:rand(20,140)}); }
+    else c.respawnAt=rand(1,5);
+  }
+  extendSections();
+  player=addHuman(myId,myName);
+  p.on('connection',c=>{
+    c.on('data',m=>onClientData(c,m));
+    c.on('close',()=>dropHuman(c.peer));
+    c.on('error',()=>{});
+  });
+  p.on('disconnected',()=>setTimeout(()=>{ if(!p.destroyed) try{ p.reconnect(); }catch(e){} },1500)); // keep the room id so new people can find us
+  syncLobby();
+}
+function addHuman(id,name){
+  name=String(name||'').trim().slice(0,14)||'Player';
+  let n=name,k=2; while(cars.some(c=>c.isPlayer&&c.name===n)) n=name.slice(0,11)+' '+(k++);
+  const used=new Set(cars.filter(c=>c.isPlayer).map(c=>c.color));
+  const color=HUMAN_COLORS.find(c=>!used.has(c))||NAMES[ri(NAMES.length)][1];
+  const car={id,name:n,color,isPlayer:true,state:'dead',x:0,y:0,vx:0,vy:0,joinT:0,alive:0,ix:0,iy:0};
+  cars.push(car); balanceBots(); return car;
+}
+// Bots fill the road up to CFG.lobbySize cars; real players replace them.
+function balanceBots(){
+  const want=Math.max(0,CFG.lobbySize-cars.filter(c=>c.isPlayer).length);
+  let bots=cars.filter(c=>!c.isPlayer);
+  while(bots.length>want){ const b=bots.find(c=>c.state==='dead')||bots[0]; usedNames.delete(b.name); cars.splice(cars.indexOf(b),1); bots=bots.filter(x=>x!==b); }
+  while(bots.length<want){ const b=newBot(); b.respawnAt=t+rand(1,4); cars.push(b); bots.push(b); }
+}
+function onClientData(c,m){
+  if(!m||typeof m!=='object') return;
+  let h=peers.get(c.peer);
+  if(m.t==='hello'){
+    if(!h){ h={conn:c,car:addHuman(c.peer,m.name)}; peers.set(c.peer,h); }
+    h.seen=performance.now(); syncLobby(); return;
+  }
+  if(!h) return;
+  h.seen=performance.now();
+  if(m.t==='in'){ h.car.ix=clamp(+m.x||0,-1,1); h.car.iy=clamp(+m.y||0,-1,1); }
+  else if(m.t==='join'&&started) h.car.pending=true;
+  else if(m.t==='bye') dropHuman(c.peer);
+}
+function dropHuman(id){
+  const h=peers.get(id); if(!h) return;
+  peers.delete(id); try{ h.conn.close(); }catch(e){}
+  const i=cars.indexOf(h.car); if(i>=0) cars.splice(i,1);
+  balanceBots(); syncLobby();
+}
+function syncLobby(){
+  lobbyList=cars.filter(c=>c.isPlayer).map(c=>({id:c.id,name:c.name}));   // host is always first
+  broadcast({t:'lobby',list:lobbyList,started});
+  lobbyPanel();
+}
+function startGame(){ started=true; syncLobby(); enterGame(); }
+const r=Math.round;
+function snapshot(){
+  return {t:'s',q:++snapSeq,T:+t.toFixed(3),tr:+travel.toFixed(1),
+    sec:sections.map(s=>[r(s.start),r(s.end),s.lanes]),
+    ob:obstacles.map(o=>[TYPES.indexOf(o.type),r(o.x),+o.d.toFixed(1),o.fwd,o.ci|0,o.tx===undefined?null:r(o.tx),r(o.trig||0),o.moved?1:0]),
+    cars:cars.map(c=>[c.id,c.name,c.color,c.state,r(c.x),r(c.y),r(c.vx),r(c.vy),+c.joinT.toFixed(2),+c.alive.toFixed(2),+(c.lastRun||0).toFixed(2),c.state==='dead'?c.reason||'':''])};
+}
+
+/* ---- client side ---- */
+function onHostData(m){
+  if(!m||typeof m!=='object') return;
+  lastSnap=performance.now();
+  if(m.t==='bye'){ hostGone(); return; }
+  if(m.t==='lobby'){ lobbyList=m.list||[]; started=!!m.started; if(started) enterGame(); else lobbyPanel(); }
+  else if(m.t==='s') applySnap(m);
+}
+function applySnap(m){
+  if(m.q<=gotSeq) return; gotSeq=m.q;   // messages can arrive out of order
+  t=m.T; travel=m.tr;
+  sections=m.sec.map(a=>({start:a[0],end:a[1],lanes:a[2]}));
+  obstacles=m.ob.map(a=>{
+    const type=TYPES[a[0]]||'pothole', sz=SZ[type];
+    const o={type,x:a[1],d:a[2],w:sz[0],h:sz[1],fwd:a[3],ci:a[4],col:TRAFFIC[a[4]]||TRAFFIC[0],y:yOf(a[2])};
+    if(a[5]!==null){ o.tx=a[5]; o.trig=a[6]; o.moved=!!a[7]; }
+    return o;
+  });
+  const prev=new Map(cars.map(c=>[c.id,c.state])), crashed=[];
+  cars=m.cars.map(a=>{
+    const c={id:a[0],name:a[1],color:a[2],state:a[3],x:a[4],y:a[5],vx:a[6],vy:a[7],joinT:a[8],alive:a[9],lastRun:a[10],reason:a[11]};
+    const ps=prev.get(c.id); if(ps&&ps!=='dead'&&c.state==='dead') crashed.push(c);
+    return c;
+  });
+  player=cars.find(c=>c.id===myId)||null;
+  crashed.forEach(boom);
+}
+
+/* ============ Boot ============ */
+namePanel();
+['pointerdown','keydown','click'].forEach(ev=>addEventListener(ev,()=>{ if(!SFX.muted) SFX.init(); },{capture:true}));
+const sndBtn=$('snd');
+const paintSnd=()=>{ sndBtn.textContent=SFX.muted?'Sound off':'Sound on'; sndBtn.setAttribute('aria-pressed',String(!SFX.muted)); };
+sndBtn.addEventListener('click',()=>{ SFX.setMuted(!SFX.muted); paintSnd(); sndBtn.blur(); });
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT') return; if(e.key==='m'||e.key==='M'){ SFX.setMuted(!SFX.muted); paintSnd(); } });
+paintSnd();
+
+let last=performance.now(), lastSend=0, lastIn='';
+function step(now){
+  const dt=Math.min(document.hidden?1:.05,Math.max(0,(now-last)/1000)); last=now;
+  readInput();
+  if(isHost){
+    if(player){ player.ix=inp.x; player.iy=inp.y; }
+    const steps=Math.ceil(dt/(1/60)); for(let i=0;i<steps;i++) update(dt/steps);
+    if(now-lastSend>=50){ lastSend=now; if(peers.size) broadcast(snapshot()); }     // ~20 snapshots a second
+    for(const [id,h] of peers) if(now-h.seen>10000) dropHuman(id);               // left without saying goodbye
+  } else if(hostConn){
+    extrapolate(dt);
+    const k=inp.x+','+inp.y;
+    if((k!==lastIn&&now-lastSend>=33)||now-lastSend>=250){ lastIn=k; lastSend=now; send({t:'in',x:inp.x,y:inp.y}); }
+    if(now-lastSnap>10000) hostGone();
+  }
+  watchMe(dt);
+  return dt;
+}
+function frame(now){
+  const dt=step(now);
+  hudTimer-=dt; if(hudTimer<=0){ updateHud(); hudTimer=.1; }
+  SFX.drive(mode==='playing'&&!!player&&player.state!=='dead', inp.x, inp.y);
+  ctx.setTransform(scaleK,0,0,scaleK,0,0); render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+addEventListener('pagehide',()=>{ if(isHost) broadcast({t:'bye'}); else send({t:'bye'}); });   // tell the others right away
+setInterval(()=>{ if(document.hidden) step(performance.now()); },250);   // keep the room alive in a background tab
+})();
+</script>
+</body>
+</html>
