@@ -9,34 +9,49 @@
 <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#5b7f46; --sign:#0e6a3b; --ink:#ffffff; --warn:#f4c20d; --warn-ink:#161616;
+  --bg:#5b7f46; --sign:#0e6a3b; --ink:#ffffff; --warn:#f4c20d; --warn-ink:#161616; --gold:#f4c20d; --side:rgba(0,0,0,.22);
   box-sizing:border-box; height:100%;
-  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#34502a; --sign:#0b5a32; } }
-:root[data-theme="dark"]{ --bg:#34502a; --sign:#0b5a32; }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#34502a; --sign:#0b5a32; --side:rgba(0,0,0,.3); } }
+:root[data-theme="dark"]{ --bg:#34502a; --sign:#0b5a32; --side:rgba(0,0,0,.3); }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{
   background:var(--bg); color:var(--ink);
   font-family:"Overpass","Arial Narrow","Helvetica Neue",Arial,sans-serif;
-  overflow:hidden; display:flex; align-items:center; justify-content:center;
+  overflow:hidden; display:flex;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);
   touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
-#wrap{position:relative;flex:none;font-size:16px}
+#wrap{position:relative;flex:1;min-width:0;height:100%;font-size:16px}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .sign{background:var(--sign);border-radius:.6em;padding:.22em;box-shadow:0 .15em 0 rgba(0,0,0,.28)}
 .sign>.in{border:.13em solid var(--ink);border-radius:.45em;padding:.45em .7em}
-#hud{position:absolute;top:.5em;left:.5em;right:.5em;pointer-events:none}
-.row{display:flex;justify-content:space-between;align-items:baseline;gap:.8em;font-weight:700;font-size:.92em;line-height:1.35}
-.row span:last-child{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- top: leader of the room ---- */
+#hud{position:absolute;top:.5em;left:50%;transform:translateX(-50%);width:min(24em,calc(100% - 1em));pointer-events:none}
+#hud .in{padding:.35em .7em .4em}
+.leadrow{display:flex;align-items:center;gap:.45em;font-weight:800;font-size:1.05em;line-height:1.25}
+.leadrow .star{color:var(--gold);font-size:1.25em;line-height:1}
+.leadrow .lbl{font-size:.7em;letter-spacing:.08em;opacity:.85}
+.leadrow #leadName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leadrow b{font-variant-numeric:tabular-nums}
+.subrow{display:flex;justify-content:space-between;gap:.8em;font-weight:700;font-size:.78em;opacity:.92;margin-top:.15em;font-variant-numeric:tabular-nums}
+#hud.me-lead{background:#8a6d00}
+
+#feed{position:absolute;top:4.6em;left:50%;transform:translateX(-50%);width:min(24em,calc(100% - 1em));display:flex;flex-direction:column;gap:.25em;pointer-events:none}
+#feed div{background:rgba(0,0,0,.55);border-radius:.35em;padding:.2em .55em;font-weight:700;font-size:.78em;text-align:center;animation:fade 4.5s forwards}
+#feed div.hot{background:var(--gold);color:var(--warn-ink)}
+@keyframes fade{0%{opacity:0;transform:translateY(-.3em)}6%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+
 #merge{position:absolute;right:.5em;top:36%;background:var(--warn);color:var(--warn-ink);border-radius:.45em;padding:.2em;pointer-events:none;text-align:center;box-shadow:0 .15em 0 rgba(0,0,0,.28)}
 #merge .in{border:.12em solid var(--warn-ink);border-radius:.3em;padding:.35em .55em;font-weight:800;line-height:1.1;font-size:.9em}
 #merge b{display:block;font-size:1.7em;font-variant-numeric:tabular-nums;margin-top:.1em}
 #merge.urgent{animation:blink .4s steps(2) infinite}
 @keyframes blink{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){#merge.urgent{animation:none}}
-#panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%}
+@media (prefers-reduced-motion:reduce){#merge.urgent{animation:none} #feed div{animation:none}}
+
+#panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(26em,calc(100% - 1.5em))}
 #panel .in{padding:1.1em 1.2em 1.2em}
 #panel h1{font-size:2.3em;line-height:.95;margin:.15em 0 .45em;font-weight:800;letter-spacing:-.01em}
 #panel h2{font-size:1.6em;line-height:1.1;margin:.1em 0 .45em;font-weight:800}
@@ -49,18 +64,50 @@ button:focus-visible{outline:.2em solid var(--warn);outline-offset:.15em}
 [hidden]{display:none!important}
 input{font:inherit;font-weight:700;font-size:1.05em;width:100%;padding:.55em .7em;border:.13em solid var(--ink);border-radius:.4em;background:rgba(0,0,0,.2);color:var(--ink);margin:.2em 0 .5em;-webkit-user-select:text;user-select:text}
 input::placeholder{color:rgba(255,255,255,.6)}
-.plist{list-style:none;margin:0 0 .8em;padding:0;max-height:11em;overflow:auto}
-.plist li{font-weight:700;padding:.25em 0;border-bottom:.06em solid rgba(255,255,255,.25)}
-.plist li i{font-style:normal;font-weight:400;opacity:.8;font-size:.85em}
+
+/* ---- side: everyone's times ---- */
+#side{flex:none;width:16rem;height:100%;padding:.6rem;background:var(--side);display:flex;flex-direction:column;gap:.5rem;font-size:15px;overflow:hidden}
+#side .sign .in{padding:.4em .6em}
+#side h3{margin:0;font-size:1.05em;font-weight:800;display:flex;justify-content:space-between;align-items:baseline;gap:.5em}
+#side h3 small{font-size:.72em;font-weight:700;opacity:.85;font-variant-numeric:tabular-nums}
+#boardToggle{display:none}
+#board{list-style:none;margin:0;padding:0;overflow:auto;flex:1;min-height:0}
+#board li{display:grid;grid-template-columns:1.4em .7em 1fr auto;align-items:center;gap:.35em;padding:.32em .35em;border-radius:.3em;font-weight:700;font-size:.9em;font-variant-numeric:tabular-nums}
+#board li:nth-child(odd){background:rgba(255,255,255,.06)}
+#board li.me{outline:.12em solid var(--ink)}
+#board li.lead{background:rgba(244,194,13,.28)}
+#board .rk{opacity:.8;text-align:right}
+#board .dot{width:.7em;height:.7em;border-radius:50%}
+#board .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#board .nm i{font-style:normal;font-weight:400;opacity:.75;font-size:.85em}
+#board .tm{text-align:right;line-height:1.1}
+#board .tm small{display:block;font-size:.72em;font-weight:400;opacity:.8}
+#board .out{opacity:.55}
+.legend{font-size:.72em;opacity:.8;line-height:1.35}
+
+@media (max-width:820px){
+  #side{position:absolute;z-index:2;left:.4rem;bottom:2.6rem;top:auto;width:12.5rem;height:auto;max-height:45%;padding:.35rem;font-size:12px;border-radius:.5rem;background:rgba(0,0,0,.45)}
+  #side .legend{display:none}
+  #boardToggle{display:block;position:absolute;z-index:3;left:.4rem;bottom:.5rem;margin:0;font-size:12px;padding:.35em .7em;background:var(--sign);color:var(--ink);border:.13em solid var(--ink)}
+  body.board-closed #side{display:none}
+  #snd{left:auto;right:.5em}
+}
 </style>
 </head>
 <body>
+<aside id="side" aria-label="Leaderboard">
+  <div class="sign"><div class="in"><h3><span>Leaderboard</span><small id="roomLbl">—</small></h3></div></div>
+  <ol id="board"></ol>
+  <p class="legend">Big number: current run. Small: best run and knockouts (KO). ★ is the leader: shove them into trouble to take the crown.</p>
+</aside>
+<button id="boardToggle" type="button" aria-controls="side">Board</button>
 <div id="wrap">
   <canvas id="c" aria-label="Game view: top-down road"></canvas>
   <div id="hud" class="sign"><div class="in">
-    <div class="row"><span>Longest survivor</span><span id="lead">—</span></div>
-    <div class="row"><span id="mineLabel">Your best</span><span id="mine">0:00</span></div>
+    <div class="leadrow"><span class="star" aria-hidden="true">★</span><span class="lbl">LEADER</span><span id="leadName">—</span><b id="leadTime"></b></div>
+    <div class="subrow"><span id="mine">Your best 0:00</span><span id="rank"></span></div>
   </div></div>
+  <div id="feed" aria-live="polite"></div>
   <div id="merge" hidden><div class="in"><span id="mergeText">Merge left</span><b id="mergeNum">10</b></div></div>
   <button id="snd" type="button" aria-pressed="true">Sound on</button>
   <div id="panel" class="sign"><div class="in" id="panelIn"></div></div>
@@ -72,63 +119,99 @@ input::placeholder{color:rgba(255,255,255,.6)}
 
 /* ============ Tunables — change these while playtesting ============ */
 const CFG = {
-  lobbySize: 5,        // total cars including you (spec: 4 → 8 → 16)
-  minLanes: 3, maxLanes: 6,
+  roomCap: 16,         // real players per room; player 17 spills into the next room
+  minLanes: 3, maxLanes: 14,
   laneWidth: 56,
   scroll: 210,         // road speed, px per second
   carSpeed: 250,       // how fast cars move around the road
   joinWindow: 10,      // seconds on the on-ramp before it starts closing
   joinGrace: 2,        // seconds while it closes
   botSkill: [0.55, 0.95],
+  bots: humans => humans>=4 ? 0 : 5-humans,   // solo: 4 bots, duo: 3, trio: 2, 4+ players: none
+  shoveCredit: 3,      // seconds after a shove that a crash still counts as your knockout
+  sendHz: 20,          // host → everyone: car positions per second
+  meHz: 30,            // you → host: your own car per second
 };
+// Lanes = max(3, cars in the room − 2), capped at maxLanes. Always fewer lanes than cars.
 
 /* ============ Constants ============ */
-const W=480, H=800, CX=222, LW=CFG.laneWidth, CW=30, CH=52, HW=CW/2, HH=CH/2;
+const H=800, CX=0, LW=CFG.laneWidth, CW=30, CH=52, HW=CW/2, HH=CH/2;
 const EG=6, EW=60, ETOP=330, YMIN=110, YMAX=H-36, TAPER=280;
 const TS_FULL=[0,.2,.4,.6,.8,1,1.2,1.4], TS_PATH=[0,.15];
 const NAMES=[['Amber','#f2a93b'],['Teal','#27a99c'],['Rose','#e8638a'],['Violet','#9474e8'],['Lime','#a6cf3a'],['Coral','#ff8161'],['Sky','#5dbdf2'],['Plum','#b35fb0'],['Sand','#d9b779'],['Mint','#62d4a8'],['Ruby','#d6453d'],['Navy','#4a62c9'],['Gold','#e8c332'],['Moss','#7f9a3d'],['Pink','#f59ac1'],['Iris','#6d7bf0']];
 const TRAFFIC=['#dcd7ca','#9ba2aa','#b9a78c','#707881','#ebe9e3','#a88f74'];
-const PLAYER_COLOR='#2f7fe0', ASPHALT='#46494e', PAINT='#f3f2ec';
+const HUMAN_COLORS=['#2f7fe0','#e0398b','#16b6c9','#f07a1a','#8e4dff','#1fc26b','#ffd23f','#ff4d4d','#ffffff','#7a5230','#00a88f','#c2185b','#9ccc65','#5c6bc0','#ff8a65','#26c6da'];
+const ASPHALT='#46494e', PAINT='#f3f2ec', GRASS='#5b7f46', GRASS_DK='#4d6f3b';
 const REASONS={pothole:'Hit a pothole',cone:'Clipped a cone',barrier:'Hit a barrier',car:'Hit traffic',truck:'Hit a truck'};
+const ST=['dead','joining','active'], STI={dead:0,joining:1,active:2};
 
 const rand=(a,b)=>a+Math.random()*(b-a), ri=n=>Math.floor(Math.random()*n);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const hash=n=>{const s=Math.sin(n*12.9898)*43758.5453;return s-Math.floor(s);};
 const fmt=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=ri(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;};
+const r1=v=>Math.round(v*10)/10, r3=v=>Math.round(v*1000)/1000;
+const esc=s=>String(s).replace(/[&<>"']/g,ch=>'&#'+ch.charCodeAt(0)+';');
 
 const cvs=document.getElementById('c'), ctx=cvs.getContext('2d'), wrap=document.getElementById('wrap');
 const $=id=>document.getElementById(id);
 
+/* ============ Shared clock ============ */
+// Everyone in a room runs on the host's clock. The road position is a pure function of it
+// (travel = scroll × t), so every screen scrolls identically and nothing ever jumps back.
+let clockOff=0;
+const now=()=>performance.now()/1000+clockOff;
+
 /* ============ State ============ */
-let t=0, travel=0, sections=[], obstacles=[], cars=[], parts=[], nextSpawn=H+260;
-let blinkPrev=null;
-const blinkOn=c=>Math.floor(c.joinT/.36)%2===0;
-let mode='lobby', player=null, lastRun=0, deathReason='', panelTimer=0, hudTimer=0;
-// Multiplayer: the host runs the whole simulation; everyone else sends input and draws the host's snapshots.
-let isHost=false, started=false, myId=null, myName='';
+let t=0, lastT=0, travel=0;
+let sections=[], secVer=0, obstacles=[], obSeq=0, nextSpawn=H+260;
+let cars=[], parts=[], me=null, leadIdx=-1, hostIdx=-1;
+let mode='name', lastRun=0, deathReason='', deathBy='', panelTimer=0, hudTimer=0;
+let isHost=false, roomNo=1, myIdx=-1, myName='', rosVer=0, rosterDirty=false;
+let carSeq=0, joinSeq=0;
 const inp={x:0,y:0};
 let best=0; try{ best=+localStorage.getItem('cc_best')||0; }catch(e){}
 const usedNames=new Set();
-let botSeq=0;
+const byIdx=i=>cars.find(c=>c.idx===i)||null;
+const humans=()=>cars.filter(c=>c.human).length;
 
 /* ============ Road geometry ============ */
 // distance d is measured along the road; screen y = H - (d - travel)
 const dOf=y=>travel+H-y, yOf=d=>H-(d-travel);
 
-function targetLanes(){
-  const n=Math.max(1,cars.filter(c=>c.state!=='dead').length);
-  return clamp(Math.round(2+n*0.6),CFG.minLanes,CFG.maxLanes);   // more players → wider road
-}
+function targetLanes(){ return clamp(Math.max(CFG.minLanes,cars.length-2),CFG.minLanes,CFG.maxLanes); }
 function extendSections(){
+  let pushed=false;
   while(!sections.length || sections[sections.length-1].end < travel+H+900){
     const first=!sections.length, s0=first?-1500:sections[sections.length-1].end;
-    let L=targetLanes();
-    if(!first){ const r=Math.random(); if(r<.3) L--; else if(r<.45) L++; }  // occasional squeeze / bonus width
-    L=clamp(L,CFG.minLanes,CFG.maxLanes);
-    sections.push({start:s0,end:s0+(first?3200:rand(1600,3200)),lanes:L});
+    sections.push({start:s0,end:s0+(first?3200:rand(1600,3200)),lanes:targetLanes()});
+    pushed=true;
   }
-  while(sections.length>1 && sections[0].end<travel-400) sections.shift();
+  pruneSections();
+  if(pushed){ secVer++; broadcast(secMsg()); }
+}
+function pruneSections(){ while(sections.length>1 && sections[0].end<travel-400) sections.shift(); }
+// Room size changed: rebuild the road just above the screen so the new width arrives in seconds, not a minute.
+function recut(){
+  const T=targetLanes();
+  let cut=travel+H+260, i=sections.findIndex(s=>cut<s.end);
+  if(i<0) return;
+  if(sections.slice(i).every(s=>s.lanes===T)) return;
+  cut=Math.max(cut,sections[i].start+TAPER+40);
+  if(cut>=sections[i].end) return;
+  sections[i].end=cut; sections.length=i+1;
+  sections.push({start:cut,end:cut+rand(1600,3200),lanes:T});
+  const rm=[];
+  obstacles=obstacles.filter(o=>{
+    const [x,,d]=obPos(o,t);
+    const off=Math.abs(x-CX)+o.w/2>lanesAt(d)*LW/2+1;
+    if(d>cut-100||off){ rm.push(o.id); return false; }
+    return true;
+  });
+  nextSpawn=Math.min(nextSpawn,cut);
+  secVer++; broadcast(secMsg());
+  if(rm.length) broadcast({t:'rm',ids:rm});
+  extendSections();
 }
 function findSection(d){
   for(const s of sections) if(d<s.end) return s;
@@ -145,16 +228,41 @@ function lanesAt(d){
       return s.lanes;
     }
   }
-  return 4;
+  return CFG.minLanes;
 }
 const halfAtY=y=>lanesAt(dOf(y))*LW/2;
 const roadRAt=y=>CX+halfAtY(y);
 
-/* ============ Obstacle patterns ============ */
+/* ============ Obstacles ============ */
+// Every obstacle's position is a pure function of the shared clock, so host and players
+// compute the same thing without the host resending the whole road 20 times a second.
 function intensity(){ return 0.9+0.3*Math.sin(t/18)+Math.min(0.35,t/900); }
 
 const SZ={pothole:[30,24],cone:[16,16],barrier:[LW*2-10,22],car:[32,58],truck:[36,96]}, TYPES=Object.keys(SZ);
 const TRAFFIC_FWD=0.36;   // all traffic cruises at the same speed, so traffic never piles into traffic
+
+function obPos(o,T){
+  const d=o.d0+o.fwd*(T-o.t0), y=H-(d-CFG.scroll*T);
+  let x=o.x0;
+  if(o.tx!==undefined){
+    const y0=H-o.d0+CFG.scroll*o.t0, tt=o.t0+(o.trig-y0)/(CFG.scroll-o.fwd), e=T-tt;
+    if(e>0){ const dx=o.tx-o.x0; x=o.x0+Math.sign(dx)*Math.min(Math.abs(dx),75*e); }
+  }
+  if(o.fwd){ const lim=lanesAt(d)*LW/2-o.w/2-2; x=clamp(x,CX-lim,CX+lim); }
+  return [x,y,d];
+}
+function placeObstacles(T){
+  for(const o of obstacles){ const p=obPos(o,T); o.x=p[0]; o.y=p[1]; o.d=p[2]; }
+  obstacles=obstacles.filter(o=>o.y<H+140);
+}
+function mkOb(id,type,x0,d0,t0,fwd,ci,tx,trig){
+  const sz=SZ[type]||SZ.pothole;
+  const o={id,type,x0,d0,t0,fwd,ci,w:sz[0],h:sz[1],col:TRAFFIC[ci]||TRAFFIC[0],x:x0,y:0,d:d0};
+  if(tx!==null&&tx!==undefined){ o.tx=tx; o.trig=trig; }
+  return o;
+}
+const packOb=o=>[o.id,TYPES.indexOf(o.type),o.x0,o.d0,o.t0,o.fwd,o.ci,o.tx===undefined?null:o.tx,o.trig===undefined?0:o.trig];
+const unpackOb=a=>mkOb(a[0],TYPES[a[1]]||'pothole',a[2],a[3],a[4],a[5],a[6],a[7],a[8]);
 
 function pickPattern(I){
   const pats=[['pothole',2],['stagger',2],['block',1.4*I],['barrier',1.4],['mover',1.3],['cones',.8*I],['combo',.8*I]];
@@ -165,37 +273,42 @@ function pickPattern(I){
 
 function buildPattern(p,d,L){
   const left=CX-L*LW/2, lc=i=>left+LW*(i+.5), out=[];
-  const fwd=CFG.scroll*TRAFFIC_FWD;
+  const fwd=r1(CFG.scroll*TRAFFIC_FWD);
   const veh=()=>Math.random()<.25?'truck':'car';
-  const add=(type,x,dd,o={})=>{
-    const sz=SZ[type], ci=ri(TRAFFIC.length);
-    const ob=Object.assign({type,x,d:dd,w:sz[0],h:sz[1],fwd:0,y:yOf(dd),ci,col:TRAFFIC[ci]},o);
-    if(Math.abs(ob.x-CX)+ob.w/2>lanesAt(dd)*LW/2+1) return;
-    out.push(ob);
+  const add=(type,x,dd,tx,trig)=>{
+    const sz=SZ[type];
+    if(Math.abs(x-CX)+sz[0]/2>lanesAt(dd)*LW/2+1) return;
+    const moving=type==='car'||type==='truck';
+    const o=mkOb(0,type,r1(x),r1(dd),r3(t),moving?fwd:0,ri(TRAFFIC.length),tx===undefined?null:r1(tx),trig===undefined?0:Math.round(trig));
+    const q=obPos(o,t); o.x=q[0]; o.y=q[1]; o.d=q[2];
+    out.push(o);
   };
+  const lanes=()=>shuffle([...Array(L).keys()]);
   switch(p){
-    case 'pothole': add('pothole',lc(ri(L))+rand(-8,8),d); break;
+    case 'pothole': lanes().slice(0,1+Math.floor(L/5)).forEach(ln=>add('pothole',lc(ln)+rand(-8,8),d+rand(0,60))); break;
     case 'stagger': {
-      const ls=shuffle([...Array(L).keys()]).slice(0,Math.min(L-1,2+ri(2)));
+      const ls=lanes().slice(0,Math.min(L-1,2+ri(2)+Math.floor(L/4)));
       ls.forEach((ln,k)=>add('pothole',lc(ln)+rand(-8,8),d+k*110)); break;
     }
     case 'block': case 'combo': {
-      const g=ri(L); let g2=-1;
-      if(p==='block' && L>=5) g2=(g+2+ri(L-3))%L;
-      for(let i=0;i<L;i++) if(i!==g && i!==g2) add(veh(),lc(i),d+rand(-8,8),{fwd});
-      if(p==='combo') add('pothole',lc(g)+rand(-6,6),d+220);   // the safe gap turns bad
+      const gaps=new Set(lanes().slice(0,p==='block'?1+Math.floor(L/5):1+Math.floor(L/7)));
+      for(let i=0;i<L;i++) if(!gaps.has(i)) add(veh(),lc(i),d+rand(-8,8));
+      if(p==='combo'){ const g=[...gaps][0]; add('pothole',lc(g)+rand(-6,6),d+220); }   // the safe gap turns bad
       break;
     }
-    case 'barrier': { const a=ri(L-1); add('barrier',left+LW*(a+1),d); break; }
+    case 'barrier': lanes().filter(a=>a<L-1).slice(0,1+Math.floor(L/6)).forEach(a=>add('barrier',left+LW*(a+1),d+rand(0,40))); break;
     case 'mover': {
-      const a=ri(L), b=a===0?1:a===L-1?L-2:a+(Math.random()<.5?-1:1);
-      add(veh(),lc(a),d,{fwd,tx:lc(b),trig:rand(140,380),moved:false});
-      if(L>=4){ const far=a<L/2?L-1:0; add(veh(),lc(far),d+rand(60,140),{fwd}); }
+      const n=1+Math.floor(L/6);
+      for(let k=0;k<n;k++){
+        const a=ri(L), b=a===0?1:a===L-1?L-2:a+(Math.random()<.5?-1:1);
+        add(veh(),lc(a),d+k*150,lc(b),rand(140,380));
+      }
+      if(L>=4){ const far=ri(L); add(veh(),lc(far),d+rand(60,140)); }
       break;
     }
     case 'cones': {
-      // Work zone: a diagonal taper closes 1–2 lanes on one side, then a cone line holds them shut.
-      const c=(L>=4&&Math.random()<.5)?2:1, side=Math.random()<.5?-1:1;
+      // Work zone: a diagonal taper closes 1–3 lanes on one side, then a cone line holds them shut.
+      const c=L>=8&&Math.random()<.4?3:(L>=4&&Math.random()<.5)?2:1, side=Math.random()<.5?-1:1;
       const edgeX=side<0?left+8:left+L*LW-8;
       const lineX=side<0?left+LW*c:left+LW*(L-c);
       const n=2*c+1;
@@ -216,10 +329,10 @@ function passable(cand){
   const isNew=new Set(cand);
   const MARGIN=4, NEED=CW+10, BAND=HH+20;
   for(let tau=0;tau<=8;tau+=.25){
-    const vis=[];
+    const T=t+tau, vis=[];
     for(const o of pool){
-      const y=o.y+(CFG.scroll-o.fwd)*tau;
-      if(y>-120&&y<H+80) vis.push({o,x:predX(o,tau),y});
+      const [x,y]=obPos(o,T);
+      if(y>-120&&y<H+80) vis.push({o,x,y});
     }
     if(!vis.some(p=>isNew.has(p.o))) continue;
     for(let i=0;i<vis.length;i++) for(let j=i+1;j<vis.length;j++){
@@ -231,7 +344,7 @@ function passable(cand){
     for(let row=-40;row<=H+40;row+=16){
       const band=vis.filter(p=>Math.abs(p.y-row)<p.o.h/2+BAND);
       if(!band.some(p=>isNew.has(p.o))) continue;
-      const half=lanesAt(travel+CFG.scroll*tau+H-row)*LW/2;
+      const half=lanesAt(CFG.scroll*T+H-row)*LW/2;
       const iv=band.map(p=>[p.x-p.o.w/2-MARGIN,p.x+p.o.w/2+MARGIN]).sort((a,b)=>a[0]-b[0]);
       let edge=CX-half+2, gap=0;
       for(const [a,b] of iv){ gap=Math.max(gap,a-edge); edge=Math.max(edge,b); }
@@ -249,10 +362,12 @@ function spawnNext(){
   for(let attempt=0;attempt<10;attempt++){
     const cand=buildPattern(pickPattern(I),d,L);
     if(!cand.length) continue;
-    const ext=Math.max(...cand.map(o=>o.d))-d;
+    const ext=Math.max(...cand.map(o=>o.d0))-d;
     if(d+ext+500>s.end) continue;
     if(!passable(cand)) continue;
+    for(const o of cand) o.id=++obSeq;
     obstacles.push(...cand);
+    broadcast({t:'ob',l:cand.map(packOb)});
     nextSpawn=d+ext+rand(250,400)/I;
     return;
   }
@@ -260,33 +375,32 @@ function spawnNext(){
   nextSpawn=(d+500>s.end)?s.end+TAPER+40:d+90;
 }
 
-function predX(o,t){
-  if(o.tx===undefined) return o.x;
-  let tm=t;
-  if(!o.moved){ const tt=(o.trig-o.y)/(CFG.scroll-o.fwd); if(t<=tt) return o.x; tm=t-tt; }
-  const dx=o.tx-o.x; return o.x+Math.sign(dx)*Math.min(Math.abs(dx),75*tm);
-}
-
 /* ============ Cars ============ */
+function mkCar(idx,id,name,color,human){
+  return {idx,id,name,color,human,local:false,state:'dead',x:0,y:0,vx:0,vy:0,evx:0,evy:0,kx:0,ky:0,
+    joinT:0,alive:0,best:0,kos:0,crowns:0,join:0,respawnAt:0,brain:null,buf:[],lag:.1,jit:.02,delay:.12,
+    hitBy:null,hitAt:-9,ix:0,iy:0,pending:false,lastRun:0};
+}
 function pickName(){
-  const free=NAMES.filter(n=>!usedNames.has(n[0]));
+  const free=NAMES.filter(n=>!usedNames.has(n[0])&&!cars.some(c=>c.name===n[0]));
   const n=free.length?free[ri(free.length)]:['Car '+(1+ri(99)),'#cccccc'];
   usedNames.add(n[0]); return n;
 }
 function newBot(){
   const [name,color]=pickName();
-  return {id:'b'+(++botSeq),name,color,isPlayer:false,state:'dead',x:0,y:0,vx:0,vy:0,joinT:0,alive:0,respawnAt:0,bot:freshBrain()};
+  const c=mkCar(++carSeq,'bot'+carSeq,name,color,false);
+  c.local=true; c.brain=freshBrain(); return c;
 }
 function freshBrain(){
   return {skill:rand(...CFG.botSkill),aggr:Math.random(),prefY:rand(430,670),next:0,tx:0,ty:0,wait:0,cost:0};
 }
 function startJoin(c){
   for(let k=0;k<12;k++){
-    const y=(k===0&&c.isPlayer)?H-110:rand(ETOP+HH+30,YMAX-10), x=roadRAt(y)+EG+EW/2;
+    const y=(k===0&&c.human)?H-110:rand(ETOP+HH+30,YMAX-10), x=roadRAt(y)+EG+EW/2;
     const clear=!cars.some(o=>o!==c&&o.state!=='dead'&&Math.abs(o.x-x)<CW+2&&Math.abs(o.y-y)<CH+6);
     if(clear){
-      Object.assign(c,{state:'joining',x,y,vx:0,vy:0,joinT:0,alive:0});
-      if(c.bot){ c.bot.wait=rand(.5,2); c.bot.next=0; c.bot.tx=x; c.bot.ty=y; }
+      Object.assign(c,{state:'joining',x,y,vx:0,vy:0,evx:0,evy:0,kx:0,ky:0,joinT:0,alive:0,hitBy:null});
+      if(c.brain){ c.brain.wait=rand(.5,2); c.brain.next=0; c.brain.tx=x; c.brain.ty=y; }
       return true;
     }
   }
@@ -301,43 +415,75 @@ function xBounds(c,y){
 }
 const yBounds=c=>c.state==='joining'?[ETOP+HH,YMAX]:[YMIN,YMAX];
 
-// Blocking rule: a move is refused only if it creates a NEW overlap with another car.
-function newHit(c,x,y){
+// Car-on-car contact. Each car resolves its OWN side of the bump (the host does bots, each player does
+// their own car), so everyone agrees without a round trip. Whoever is moving into the other does the
+// shoving: the car being hit takes most of the push plus a sideways kick that can carry it into trouble.
+function bump(c,nx,ny,vx,vy){
   for(const o of cars){
     if(o===c||o.state==='dead') continue;
-    if(Math.abs(o.x-x)<CW && Math.abs(o.y-y)<CH && !(Math.abs(o.x-c.x)<CW && Math.abs(o.y-c.y)<CH)) return true;
+    const dx=nx-o.x, dy=ny-o.y, px=CW-Math.abs(dx), py=CH-Math.abs(dy);
+    if(px<=0||py<=0) continue;
+    const ramp=c.state==='joining'&&o.state==='joining';        // the ramp is one car wide: separate front-to-back
+    if(px<py&&!ramp){
+      const dir=dx!==0?Math.sign(dx):(c.idx>o.idx?1:-1);
+      const mine=Math.max(0,-vx*dir), his=Math.max(0,o.evx*dir);
+      const share=Math.max(clamp((his+10)/(mine+his+20),.04,.96),(px-10)/px);   // never sink more than ~10px into a car
+      nx+=dir*px*share;
+      if(his>90&&his>mine){ c.kx=dir*clamp(his*1.6,260,460); c.hitBy=o.idx; c.hitAt=t; if(c===me) SFX.bump(1); else if(o===me) SFX.bump(.6); }
+    } else {
+      const dir=dy!==0?Math.sign(dy):(c.idx>o.idx?1:-1);
+      const mine=Math.max(0,-vy*dir), his=Math.max(0,o.evy*dir);
+      const share=Math.max(clamp((his+10)/(mine+his+20),.04,.96),(py-10)/py);
+      ny+=dir*py*share;
+      if(his>90&&his>mine){ c.ky=dir*clamp(his*1.3,200,400); c.hitBy=o.idx; c.hitAt=t; if(c===me) SFX.bump(.8); else if(o===me) SFX.bump(.5); }
+    }
   }
-  return false;
+  return [nx,ny];
 }
 function moveCar(c,dt){
-  let [lo,hi]=xBounds(c,c.y);
-  const nx=clamp(c.x+c.vx*dt,lo,Math.max(lo,hi));
-  if(!newHit(c,nx,c.y)) c.x=nx;
+  const ctl=clamp(1-Math.hypot(c.kx,c.ky)/320,.2,1);          // just got rammed: you lose grip for a moment
+  const vx=c.vx*ctl+c.kx, vy=c.vy*ctl+c.ky, ox=c.x, oy=c.y;
+  const k=Math.exp(-dt*4.5); c.kx*=k; c.ky*=k;
+  if(Math.abs(c.kx)<5) c.kx=0; if(Math.abs(c.ky)<5) c.ky=0;
   const [ylo,yhi]=yBounds(c);
-  const ny=clamp(c.y+c.vy*dt,ylo,yhi);
-  if(!newHit(c,c.x,ny)) c.y=ny;
-  [lo,hi]=xBounds(c,c.y);
-  if(c.state==='active') c.x=clamp(c.x,lo,hi);             // a narrowing road always wins
-  else if(c.x>hi && !newHit(c,hi,c.y)) c.x=hi;              // closing on-ramp nudges you in
+  let ny=clamp(c.y+vy*dt,ylo,yhi);
+  let [lo,hi]=xBounds(c,ny);
+  let nx=clamp(c.x+vx*dt,lo,Math.max(lo,hi));
+  [nx,ny]=bump(c,nx,ny,vx,vy);
+  ny=clamp(ny,ylo,yhi);
+  [lo,hi]=xBounds(c,ny);
+  if(c.state==='active'){
+    // Shoved hard into the guardrail = wreck
+    const shoved=c.hitBy!==null&&t-c.hitAt<.8;
+    if(shoved&&((nx<lo-1&&c.kx<-80)||(nx>hi+1&&c.kx>80))){ c.x=clamp(nx,lo,hi); c.y=ny; crash(c,'Slammed into the guardrail'); return; }
+    nx=clamp(nx,lo,hi);                                     // a narrowing road always wins
+  } else if(nx>hi) nx=hi;                                   // closing on-ramp nudges you in
+  else if(nx<lo) nx=lo;
+  c.x=nx; c.y=ny;
+  // Report what the car actually did, not what the stick asked for: a car pinned against a wall is not
+  // moving, and telling other screens otherwise makes them draw it sliding through the wall and snapping back.
+  if(dt>0){ c.evx=(nx-ox)/dt; c.evy=(ny-oy)/dt; }
   if(c.state==='joining' && c.x+HW<=roadRAt(c.y)+EG){ c.state='active'; c.alive=0; }
 }
 
 // Sound + debris for a crash (runs on every screen)
 function boom(c){
-  if(c===player) SFX.crash(1); else if(c.y>-40&&c.y<H+40) SFX.crash(.3);
+  if(c===me) SFX.crash(1); else if(c.y>-40&&c.y<H+40) SFX.crash(.3);
   for(let i=0;i<22;i++){
     const a=Math.random()*Math.PI*2, s=rand(60,260);
     parts.push({x:c.x,y:c.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(.4,.9),col:i%3?c.color:'#ffb347'});
   }
 }
+// Only called for cars this machine drives (bots + host's car on the host, your own car on your screen)
 function crash(c,reason){
-  c.lastRun=c.state==='active'?c.alive:0; c.reason=reason;
-  c.state='dead';
+  if(c.state==='dead') return;
+  const by=(c.hitBy!==null&&t-c.hitAt<CFG.shoveCredit&&byIdx(c.hitBy))?c.hitBy:null;
+  c.lastRun=c.state==='active'?c.alive:0; c.reason=reason; c.by=by;
+  c.state='dead'; c.kx=c.ky=0; c.hitBy=null;
   boom(c);
-  if(!c.isPlayer){
-    usedNames.delete(c.name);
-    c.respawnAt=t+rand(1.5,4);
-  }
+  if(c.brain){ usedNames.delete(c.name); c.respawnAt=t+rand(1.5,4); }
+  if(isHost) onKO(c.idx,reason,by,c.lastRun);
+  else send({t:'ko',r:reason,by,run:r1(c.lastRun)});
 }
 function checkCrash(c){
   for(const o of obstacles){
@@ -355,18 +501,19 @@ function hazard(obs,px,py,t0,ts){
     if(o.y-o.h/2-HH-10>py) continue;                                   // already passed
     if(o.y+rel*(t0+ts[ts.length-1])+o.h/2+HH+10<py) continue;          // won't arrive in time
     for(const dt of ts){
-      const tt=t0+dt, oy=o.y+rel*tt, ox=predX(o,tt);
+      const tt=t0+dt, [ox,oy]=obPos(o,t+tt);
       if(Math.abs(ox-px)<o.w/2+HW+5 && Math.abs(oy-py)<o.h/2+HH+6){ c+=10/(1+tt); break; }
     }
   }
   return c;
 }
 function botThink(c){
-  const b=c.bot, sp=CFG.carSpeed*(.8+.2*b.skill);
+  const b=c.brain, sp=CFG.carSpeed*(.8+.2*b.skill);
   const look=TS_FULL.slice(0,3+Math.round(b.skill*5));
   const obs=obstacles.filter(o=>o.y>-450&&o.y<H+80);
   const others=cars.filter(o=>o!==c&&o.state!=='dead');
   const joiners=others.filter(o=>o.state==='joining');
+  const L=byIdx(leadIdx), hunt=L&&L!==c&&L.state==='active'&&b.aggr>.55;   // aggressive bots go after the leader
   let best=null, bestCost=1e9;
   const tryCand=(px,py,extra)=>{
     const dist=Math.hypot(px-c.x,py-c.y), ta=dist/sp;
@@ -374,10 +521,11 @@ function botThink(c){
     cost+=0.8*hazard(obs,c.x+(px-c.x)*.33,c.y+(py-c.y)*.33,ta*.33,TS_PATH);
     cost+=0.8*hazard(obs,c.x+(px-c.x)*.66,c.y+(py-c.y)*.66,ta*.66,TS_PATH);
     cost+=hazard(obs,px,py,ta,look);
-    const half=lanesAt(travel+CFG.scroll*(ta+.8)+H-py)*LW/2;
+    const half=lanesAt(CFG.scroll*(t+ta+.8)+H-py)*LW/2;
     if(Math.abs(px-CX)>half-HW+1) cost+=6;                              // road narrowing ahead
     for(const o of others){
       const dx=Math.abs(o.x-px), dy=Math.abs(o.y-py);
+      if(hunt&&o===L){ if(dx<CW+10&&dy<CH*.7) cost-=2.2*b.aggr; continue; }
       if(dx<CW+4&&dy<CH+4) cost+=o.state==='active'?5:3;
       else if(dx<CW+20&&dy<CH+20) cost+=.6;
     }
@@ -386,13 +534,14 @@ function botThink(c){
   };
   if(c.state==='active'){
     const ys=[c.y-150,c.y-75,c.y,c.y+75,c.y+150,b.prefY].map(v=>clamp(v,YMIN,YMAX));
+    if(hunt) ys.push(clamp(L.y,YMIN,YMAX));
+    const step=Math.max(12,LW*lanesAt(dOf(c.y))/40);
     for(const py of ys){
       const hl=Math.min(halfAtY(py-HH),halfAtY(py+HH)), lo=CX-hl+HW, hi=CX+hl-HW;
-      for(let px=lo;px<=hi+.1;px+=12){
+      for(let px=lo;px<=hi+.1;px+=step){
         let extra=0;
         for(const j of joiners)                                          // aggressive bots guard the merge
           if(Math.abs(py-j.y)<45 && px>roadRAt(py)-HW-14) extra-=b.aggr*2.5;
-        if(player&&player.state==='active'&&Math.abs(px-player.x)<20&&py<player.y-40&&py>player.y-100) extra-=b.aggr*1.2;
         tryCand(px,py,extra);
       }
     }
@@ -403,7 +552,7 @@ function botThink(c){
   b.tx=best[0]; b.ty=best[1]; b.cost=bestCost;
 }
 function updateBot(c,dt){
-  const b=c.bot;
+  const b=c.brain;
   b.next-=dt;
   if(b.next<=0){ botThink(c); b.next=.09+(1-b.skill)*.22+rand(0,.05); }
   const sp=CFG.carSpeed*(.8+.2*b.skill);
@@ -424,7 +573,7 @@ function updateBot(c,dt){
 const SFX=(()=>{
   let ac=null, master=null, noiseBuf=null, eng=null, muted=false;
   const last=new Map();
-  let lastDir=0, lastWhoosh=0;
+  let lastDir=0, lastWhoosh=0, lastBump=0;
   try{ muted=localStorage.getItem('cc_mute')==='1'; }catch(e){}
 
   function init(){
@@ -511,6 +660,14 @@ const SFX=(()=>{
   const tock=()=>{ burst(.012,.3,'highpass',2000); blip(1150,.02,.1); };
   // Stalk snapping back when you complete the merge
   const cancel=()=>{ burst(.02,.5,'bandpass',1400); blip(820,.035,.15); burst(.014,.32,'highpass',2300,.05); };
+  // Door-panel thud when cars trade paint
+  function bump(vol){
+    if(!ac||muted||ac.currentTime-lastBump<.12) return; lastBump=ac.currentTime;
+    burst(.12,.45*vol,'lowpass',900); const b=blip(110,.12,.35*vol,'sine');
+    if(b) b.o.frequency.exponentialRampToValueAtTime(60,b.t0+.1);
+  }
+  // Little fanfare when you take the crown
+  const crown=()=>{ [660,880,1320].forEach((f,i)=>blip(f,.12,.12,'triangle',i*.09)); };
 
   function crash(vol){
     if(!ac||muted) return;
@@ -531,7 +688,7 @@ const SFX=(()=>{
     if(!ac) return;
     if(document.hidden) ac.suspend(); else if(!muted) ac.resume();
   });
-  return {init,drive,tick,tock,cancel,crash,setMuted,get muted(){return muted;}};
+  return {init,drive,tick,tock,cancel,bump,crown,crash,setMuted,get muted(){return muted;}};
 })();
 
 /* ============ Input ============ */
@@ -545,15 +702,15 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 addEventListener('blur',()=>keys.clear());
-const toCanvas=e=>{const r=cvs.getBoundingClientRect();return [(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];};
+const toWrap=e=>{const r=wrap.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
 wrap.addEventListener('pointerdown',e=>{
   if(e.target.closest('button,input')) return;
-  const [x,y]=toCanvas(e); Object.assign(touch,{active:true,ox:x,oy:y,x,y,vx:0,vy:0});
+  const [x,y]=toWrap(e); Object.assign(touch,{active:true,ox:x,oy:y,x,y,vx:0,vy:0});
   try{wrap.setPointerCapture(e.pointerId);}catch(_){}
 });
 wrap.addEventListener('pointermove',e=>{
   if(!touch.active) return;
-  const [x,y]=toCanvas(e); touch.x=x; touch.y=y;
+  const [x,y]=toWrap(e); touch.x=x; touch.y=y;
   const dx=x-touch.ox, dy=y-touch.oy, m=Math.hypot(dx,dy);
   if(m<8){touch.vx=touch.vy=0;return;}
   const k=Math.min(1,m/45)/m; touch.vx=dx*k; touch.vy=dy*k;
@@ -569,11 +726,7 @@ function readInput(){
   if(keys.has('arrowdown')||keys.has('s')) iy++;
   if(touch.active){ ix+=touch.vx; iy+=touch.vy; }
   const m=Math.hypot(ix,iy); if(m>1){ix/=m;iy/=m;}
-  inp.x=Math.round(ix*100)/100; inp.y=Math.round(iy*100)/100;
-}
-function updatePlayer(c){   // any human car; remote humans' ix/iy arrive over the network
-  const ix=c.ix||0, iy=c.iy||0;
-  c.vx=ix*CFG.carSpeed; c.vy=iy*CFG.carSpeed;
+  inp.x=ix; inp.y=iy;
 }
 
 /* ============ Panels ============ */
@@ -584,28 +737,32 @@ function showPanel(html,label,onClick){
   b.addEventListener('click',()=>{ $('panel').hidden=true; onClick(); });
   b.focus({preventScroll:true});
 }
+const BYLINE='<p class="small">A game by <b>Bugbear</b></p>';
+function roomText(){ return `Room ${roomNo} · ${humans()}/${CFG.roomCap} players`; }
 function titlePanel(){
+  mode='title';
   showPanel(`<h1>Carlane Carnage</h1>
-    <p>Stay on the road longer than everyone else. Nobody can hit you, but anyone can take your space.</p>
-    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. You join from the on-ramp on the right: merge left before it ends. Press M to mute.</p>`,
+    <p class="small"><b>${esc(roomText())}</b></p>
+    <p>The road never ends. Survive the longest to become the <b>★ leader</b>. Everyone else wants you gone.</p>
+    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. Drive sideways into a car to shove it: if it crashes within ${CFG.shoveCredit} seconds, the knockout is yours. You join from the on-ramp on the right: merge left before it ends. M mutes.</p>`,
     'Join the road', joinGame);
 }
 function deathPanel(){
-  showPanel(`<h2>${deathReason}</h2>
+  showPanel(`<h2>${esc(deathReason)}</h2>
+    ${deathBy?`<p>Shoved by <b>${esc(deathBy)}</b></p>`:''}
     <p>You survived <span class="big">${fmt(lastRun)}</span></p>
     <p class="small">Your best is ${fmt(best)}. The road kept going without you.</p>`,
     'Rejoin', joinGame);
 }
 function joinGame(){
   mode='playing';
-  if(isHost){ if(player) player.pending=true; } else send({t:'join'});
+  if(me) me.pending=true;
 }
-const esc=s=>String(s).replace(/[&<>"']/g,ch=>'&#'+ch.charCodeAt(0)+';');
-const BYLINE='<p class="small">A game by <b>Bugbear</b></p>';
 function namePanel(status){
+  mode='name';
   $('panelIn').innerHTML=`<h1>Carlane Carnage</h1>${BYLINE}
     <form id="nameForm"><input id="nameIn" maxlength="14" placeholder="Your name" autocomplete="off" required>
-    <button type="submit">Enter lobby</button></form><p class="small" id="status">${status||''}</p>`;
+    <button type="submit">Find a room</button></form><p class="small" id="status">${status||''}</p>`;
   $('panel').hidden=false;
   const i=$('nameIn'); try{ i.value=localStorage.getItem('cc_name')||''; }catch(e){}
   i.focus({preventScroll:true});
@@ -614,97 +771,133 @@ function namePanel(status){
     myName=i.value.trim().slice(0,14); if(!myName) return;
     try{ localStorage.setItem('cc_name',myName); }catch(e){}
     i.disabled=true; e.target.querySelector('button').disabled=true;
-    connect();
+    mode='connecting'; connect();
   });
 }
 const setStatus=m=>{ const s=$('status'); if(s) s.textContent=m; };
-let lobbyList=[];   // [{id,name}], first is the host
-function lobbyPanel(){
-  if(mode!=='lobby') return;
-  const host=lobbyList[0];
-  $('panelIn').innerHTML=`<h1>Carlane Carnage</h1>${BYLINE}
-    <h2>Waiting lobby</h2>
-    <ul class="plist">${lobbyList.map((p,i)=>`<li>${esc(p.name)} ${i===0?'<i>(host)</i>':''} ${p.id===myId?'<i>(you)</i>':''}</li>`).join('')}</ul>
-    ${isHost?'<p class="small">Share this page\'s link. Start when everyone is in.</p><button type="button" id="startBtn">Start</button>'
-            :`<p class="small">Waiting for ${esc(host?host.name:'the host')} to start…</p>`}`;
-  $('panel').hidden=false;
-  const b=$('startBtn'); if(b){ b.addEventListener('click',startGame); b.focus({preventScroll:true}); }
-}
-function enterGame(){ if(mode==='lobby'){ mode='title'; titlePanel(); } }
-function hostGone(){
-  if(isHost||mode==='gone') return;
-  mode='gone'; cars=[]; player=null;
-  showPanel('<h2>The host left</h2><p>The game ended because the host closed their page.</p>','Back to lobby',()=>location.reload());
+function toast(html,hot){
+  const f=$('feed'), d=document.createElement('div');
+  d.innerHTML=html; if(hot) d.className='hot';
+  f.appendChild(d); while(f.children.length>4) f.firstChild.remove();
+  setTimeout(()=>d.remove(),4600);
 }
 
-/* ============ Update ============ */
-function update(dt){
-  t+=dt; travel+=CFG.scroll*dt;
-  extendSections();
-  while(nextSpawn<travel+H+140){ const b=nextSpawn; spawnNext(); if(nextSpawn===b) break; }
-  moveObstacles(dt);
-
-  for(const c of cars) if(c.isPlayer&&c.pending&&c.state==='dead'&&startJoin(c)) c.pending=false;
-
-  for(const c of cars){
-    if(c.state==='dead'){
-      if(!c.isPlayer && t>=c.respawnAt){
-        const [n,col]=pickName(); c.name=n; c.color=col; c.bot=freshBrain();   // a new player takes the slot
-        if(!startJoin(c)){ usedNames.delete(n); c.respawnAt=t+.5; }
-      }
-      continue;
-    }
-    if(c.isPlayer) updatePlayer(c); else updateBot(c,dt);
+/* ============ Simulation ============ */
+// Advance the shared world to time T. Each machine only drives its own cars; everything else is
+// interpolated from the network (see sampleRemote).
+function simulate(T){
+  let dt=T-lastT;
+  if(dt<=0) return;
+  if(dt>1.5){ lastT=T-1.5; dt=1.5; }                    // came back from a long stall: don't replay it all
+  const n=Math.ceil(dt/(1/60)), h=dt/n;
+  for(let i=1;i<=n;i++){
+    t=lastT+h*i; travel=CFG.scroll*t;
+    if(isHost){
+      extendSections();
+      while(nextSpawn<travel+H+140){ const b=nextSpawn; spawnNext(); if(nextSpawn===b) break; }
+    } else pruneSections();
+    placeObstacles(t);
+    for(const c of cars) if(c.local) simCar(c,h);
   }
-  for(const c of cars) if(c.state!=='dead') moveCar(c,dt);
-  for(const c of cars){
-    if(c.state==='dead') continue;
-    if(c.state==='active') c.alive+=dt; else c.joinT+=dt;
-    checkCrash(c);
-  }
-  tickEffects(dt);
+  lastT=T; t=T; travel=CFG.scroll*T;
 }
-function moveObstacles(dt){
-  for(const o of obstacles){
-    o.d+=o.fwd*dt; o.y=yOf(o.d);
-    if(o.tx!==undefined){
-      if(!o.moved && o.y>o.trig) o.moved=true;
-      if(o.moved){ const dx=o.tx-o.x; o.x+=Math.sign(dx)*Math.min(Math.abs(dx),75*dt); }
-    }
-    if(o.fwd){ const lim=lanesAt(o.d)*LW/2-o.w/2-2; o.x=clamp(o.x,CX-lim,CX+lim); }
+function simCar(c,dt){
+  if(c.state==='dead'){
+    if(c.brain && t>=c.respawnAt){
+      const [n,col]=pickName(); c.name=n; c.color=col; c.brain=freshBrain(); rosterDirty=true;  // a new driver takes the slot
+      if(!startJoin(c)){ usedNames.delete(n); c.respawnAt=t+.5; }
+    } else if(c===me && c.pending && startJoin(c)) c.pending=false;
+    return;
   }
-  obstacles=obstacles.filter(o=>o.y<H+140);
-}
-// Client side: glide everything forward between host snapshots
-function extrapolate(dt){
-  t+=dt; travel+=CFG.scroll*dt;
-  moveObstacles(dt);
-  for(const c of cars){
-    if(c.state==='dead') continue;
-    c.x+=c.vx*dt; c.y+=c.vy*dt;
-    if(c.state==='active') c.alive+=dt; else c.joinT+=dt;
-  }
-  tickEffects(dt);
+  if(c.brain) updateBot(c,dt);
+  else { c.vx=inp.x*CFG.carSpeed; c.vy=inp.y*CFG.carSpeed; }
+  moveCar(c,dt);
+  if(c.state==='dead') return;
+  if(c.state==='active') c.alive+=dt; else c.joinT+=dt;
+  checkCrash(c);
 }
 function tickEffects(dt){
-  if(player&&player.state==='joining'){
-    const on=blinkOn(player);
+  if(me&&me.state==='joining'){
+    const on=blinkOn(me);
     if(on!==blinkPrev){ on?SFX.tick():SFX.tock(); blinkPrev=on; }
   } else blinkPrev=null;
   for(const p of parts){ p.x+=p.vx*dt; p.y+=(p.vy+CFG.scroll*.6)*dt; p.vx*=.96; p.vy*=.96; p.life-=dt; }
   parts=parts.filter(p=>p.life>0);
 }
-// Watch my own car (host or client) for merge / crash moments
-let myPrev=null;
+let blinkPrev=null;
+const blinkOn=c=>Math.floor(c.joinT/.36)%2===0;
+
+// Remote cars: render ~100 ms in the past and interpolate between the two updates around that moment.
+// The delay adapts per car to how late its updates actually arrive, so jitter never shows up as shake.
+function sampleRemote(c,rt){
+  const b=c.buf; if(!b.length) return;
+  while(b.length>2&&b[1].s<=rt) b.shift();
+  let st,x,y,vx,vy,a,j;
+  if(b.length>=2&&rt>=b[0].s&&rt<=b[1].s){
+    const p=b[0], q=b[1];
+    if(p.st!==q.st){ const e=(rt-p.s<q.s-rt)?p:q; ({st,x,y,vx,vy,a,j}=e); }
+    else {
+      const k=(rt-p.s)/((q.s-p.s)||1);
+      st=p.st; x=p.x+(q.x-p.x)*k; y=p.y+(q.y-p.y)*k; vx=p.vx+(q.vx-p.vx)*k; vy=p.vy+(q.vy-p.vy)*k;
+      a=p.a+(q.a-p.a)*k; j=p.j+(q.j-p.j)*k;
+    }
+  } else {
+    const e=rt<b[0].s?b[0]:b[b.length-1];
+    const ex=e.st===0?0:clamp(rt-e.s,0,.12);              // short gap: coast; long gap: hold still
+    st=e.st; x=e.x+e.vx*ex; y=e.y+e.vy*ex; vx=e.vx; vy=e.vy; a=e.a+(e.st===2?ex:0); j=e.j+(e.st===1?ex:0);
+  }
+  const s=ST[st]||'dead';
+  if(c.state!=='dead'&&s==='dead'){ c.x=x; c.y=y; boom(c); }
+  c.state=s; c.x=x; c.y=y; c.vx=c.evx=vx; c.vy=c.evy=vy; c.alive=a; c.joinT=j;
+}
+function pushRemote(c,e){
+  const b=c.buf;
+  if(b.length&&e.s<=b[b.length-1].s) return;             // late or duplicate
+  b.push(e); if(b.length>40) b.shift();
+  const lag=now()-e.s;
+  c.jit+=(Math.abs(lag-c.lag)-c.jit)*.1; c.lag+=(lag-c.lag)*.1;
+  c.delay=clamp(c.lag+2*c.jit+.02,.05,.4);
+}
+const unpackMe=a=>({s:a[0],st:a[1],x:a[2],y:a[3],vx:a[4],vy:a[5],a:a[6],j:a[7]});
+const packMe=c=>[r3(t),STI[c.state],r1(c.x),r1(c.y),Math.round(c.evx),Math.round(c.evy),r1(c.alive),r1(c.joinT)];
+
+function computeLeader(){
+  let b=null; for(const c of cars) if(c.state==='active'&&c.alive>3&&(!b||c.alive>b.alive)) b=c;
+  return b?b.idx:-1;
+}
+
+// Watch my own car for merge / crash moments
+let myPrev=null, prevLead=-1;
 function watchMe(dt){
-  const s=player?player.state:null;
+  const s=me?me.state:null;
   if(myPrev==='joining'&&s==='active') SFX.cancel();
   if(myPrev&&myPrev!=='dead'&&s==='dead'&&mode==='playing'){
-    lastRun=player.lastRun||0; deathReason=player.reason||'Crashed'; mode='dead'; panelTimer=0.9;
+    lastRun=me.lastRun||0; deathReason=me.reason||'Crashed';
+    const k=me.by!=null?byIdx(me.by):null; deathBy=k?k.name:'';
+    mode='dead'; panelTimer=0.9;
     if(lastRun>best){ best=lastRun; try{localStorage.setItem('cc_best',String(best));}catch(e){} }
   }
   myPrev=s;
   if(mode==='dead' && panelTimer>0){ panelTimer-=dt; if(panelTimer<=0) deathPanel(); }
+  if(leadIdx!==prevLead){
+    if(me&&leadIdx===me.idx){ toast('★ You are the leader. Everyone is coming for you.',true); SFX.crown(); }
+    prevLead=leadIdx;
+  }
+}
+
+/* ============ Camera ============ */
+// The view zooms out as the road widens so every lane (and the on-ramp) always fits.
+let camW=480, camC=CX+60, view={s:1,L:0,T:0,R:480,B:H}, cssW=480, cssH=800, dpr=1;
+function updateCamera(dt){
+  let maxL=CFG.minLanes;
+  for(let d=travel-100;d<=travel+H+200;d+=100) maxL=Math.max(maxL,lanesAt(d));
+  const need=Math.max(480,maxL*LW+EG+EW+110);
+  camW+=(need-camW)*Math.min(1,dt*1.8);
+  const hl=maxL*LW/2, left=CX-hl-40, right=CX+hl+EG+EW+40;
+  camC+=((left+right)/2-camC)*Math.min(1,dt*1.8);
+  const s=Math.min(cssW/camW,cssH/H);
+  const vw=cssW/s, vh=cssH/s;
+  view={s,L:camC-vw/2,R:camC+vw/2,T:H/2-vh/2,B:H/2+vh/2};
 }
 
 /* ============ Drawing ============ */
@@ -713,54 +906,56 @@ function rr(x,y,w,h,r){
   ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 function drawRoad(){
-  ctx.fillStyle='#5b7f46'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='#4d6f3b';
-  for(let d=Math.floor((travel-60)/48)*48; d<travel+H+60; d+=48){
+  const {L,R,T,B}=view;
+  ctx.fillStyle=GRASS; ctx.fillRect(L,T,R-L,B-T);
+  ctx.fillStyle=GRASS_DK;
+  for(let d=Math.floor((travel+H-B-60)/48)*48; d<travel+H-T+60; d+=48){
     const y=yOf(d), hl=lanesAt(d)*LW/2;
-    for(let k=0;k<3;k++){
+    for(let k=0;k<4;k++){
       const h=hash(d*.37+k*7.1), side=hash(d*.11+k)<.5;
-      const x=side? h*(CX-hl-24) : CX+hl+80+h*(W-(CX+hl+80));
-      ctx.fillRect(x,y+k*14,3,7); ctx.fillRect(x+4,y+k*14+2,3,6);
+      const x=side? L+h*(CX-hl-24-L) : CX+hl+80+h*(R-(CX+hl+80));
+      ctx.fillRect(x,y+k*12,3,7); ctx.fillRect(x+4,y+k*12+2,3,6);
     }
   }
   const poly=(extra,col)=>{
     ctx.fillStyle=col; ctx.beginPath();
-    for(let y=-20;y<=H+20;y+=10) ctx.lineTo(CX-halfAtY(y)-extra,y);
-    for(let y=H+20;y>=-20;y-=10) ctx.lineTo(CX+halfAtY(y)+extra,y);
+    for(let y=T-20;y<=B+20;y+=10) ctx.lineTo(CX-halfAtY(y)-extra,y);
+    for(let y=B+20;y>=T-20;y-=10) ctx.lineTo(CX+halfAtY(y)+extra,y);
     ctx.closePath(); ctx.fill();
   };
   poly(10,'#8c8a80'); poly(0,ASPHALT);
 }
 function drawRoadLines(){
+  const {T,B}=view;
   ctx.strokeStyle=PAINT; ctx.lineWidth=3;
   const rampOpen=cars.some(c=>c.state==='joining');
   for(const s of [-1,1]){
     ctx.beginPath();
-    const yEnd=(s===1&&rampOpen)?ETOP-40:H+20;   // the merge edge is open while someone is joining
-    for(let y=-20;y<=yEnd;y+=10) ctx.lineTo(CX+s*(halfAtY(y)-4),y);
+    const yEnd=(s===1&&rampOpen)?ETOP-40:B+20;   // the merge edge is open while someone is joining
+    for(let y=T-20;y<=yEnd;y+=10) ctx.lineTo(CX+s*(halfAtY(y)-4),y);
     ctx.stroke();
   }
   ctx.fillStyle='rgba(243,242,236,.75)';
-  for(let d=Math.floor(travel/64)*64; d<travel+H+64; d+=64){
-    const L=lanesAt(d); if(Math.abs(L-Math.round(L))>.001) continue;
-    const y=yOf(d), left=CX-L*LW/2;
-    for(let k=1;k<L;k++) ctx.fillRect(left+LW*k-1.5,y-16,3,32);
+  for(let d=Math.floor((travel+H-B)/64)*64; d<travel+H-T+64; d+=64){
+    const Ln=lanesAt(d); if(Math.abs(Ln-Math.round(Ln))>.001) continue;
+    const y=yOf(d), left=CX-Ln*LW/2;
+    for(let k=1;k<Ln;k++) ctx.fillRect(left+LW*k-1.5,y-16,3,32);
   }
 }
 function drawEntry(){
   const joiners=cars.filter(c=>c.state==='joining'); if(!joiners.length) return;
-  const w=EW*(1-Math.max(...joiners.map(squeeze))), top=ETOP-80;
+  const w=EW*(1-Math.max(...joiners.map(squeeze))), top=ETOP-80, bot=view.B+20;
   const k=y=>y<ETOP?(y-top)/80:1;
   ctx.fillStyle=ASPHALT; ctx.beginPath();
-  for(let y=top;y<=H+20;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y),y);
-  for(let y=H+20;y>=top;y-=10) ctx.lineTo(roadRAt(y)-3,y);
+  for(let y=top;y<=bot;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y),y);
+  for(let y=bot;y>=top;y-=10) ctx.lineTo(roadRAt(y)-3,y);
   ctx.closePath(); ctx.fill();
   ctx.strokeStyle=PAINT; ctx.lineWidth=3; ctx.beginPath();
-  for(let y=top;y<=H+20;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y)-3,y);
+  for(let y=top;y<=bot;y+=10) ctx.lineTo(roadRAt(y)+(EG+w)*k(y)-3,y);
   ctx.stroke();
   ctx.fillStyle='rgba(243,242,236,.8)';
   const off=(travel%28);
-  for(let y=ETOP+off-28;y<H+20;y+=28) if(y>ETOP-10) ctx.fillRect(roadRAt(y)+EG/2-1.5,y,3,12);
+  for(let y=ETOP+off-28;y<bot;y+=28) if(y>ETOP-10) ctx.fillRect(roadRAt(y)+EG/2-1.5,y,3,12);
   if(w>24){
     const ax=roadRAt(ETOP+40)+EG+w/2, ay=ETOP+40;
     ctx.fillStyle='rgba(243,242,236,.7)'; ctx.beginPath();
@@ -770,7 +965,7 @@ function drawEntry(){
 }
 function drawObstacle(o){
   const {x,y,w,h}=o;
-  if(y<-120||y>H+120) return;
+  if(y<view.T-120||y>view.B+120) return;
   if(o.type==='pothole'){
     ctx.fillStyle='#2a2b2e'; ctx.beginPath(); ctx.ellipse(x,y,w/2,h/2,0,0,Math.PI*2); ctx.fill();
     ctx.strokeStyle='#6b6d70'; ctx.lineWidth=2; ctx.stroke();
@@ -805,16 +1000,21 @@ function drawObstacle(o){
 function drawStar(x,y,r){
   ctx.beginPath();
   for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rad=i%2?r*.45:r; ctx.lineTo(x+Math.cos(a)*rad,y+Math.sin(a)*rad); }
-  ctx.closePath(); ctx.fill();
+  ctx.closePath();
 }
 function drawCar(c,leader){
   const {x,y}=c, w=CW, h=CH;
+  if(leader){                                               // the leader glows so everyone can find them
+    const g=ctx.createRadialGradient(x,y,6,x,y,52);
+    g.addColorStop(0,'rgba(244,194,13,.45)'); g.addColorStop(1,'rgba(244,194,13,0)');
+    ctx.fillStyle=g; ctx.fillRect(x-52,y-52,104,104);
+  }
   ctx.fillStyle='rgba(0,0,0,.28)'; rr(x-w/2+2,y-h/2+3,w,h,7); ctx.fill();
   ctx.fillStyle=c.color; rr(x-w/2,y-h/2,w,h,7); ctx.fill();
   ctx.fillStyle='#1f2a36'; rr(x-w/2+4,y-h/2+10,w-8,11,3); ctx.fill(); rr(x-w/2+4,y+h/2-14,w-8,7,3); ctx.fill();
   ctx.fillStyle='rgba(255,255,255,.2)'; rr(x-w/2+5,y-h/2+23,w-10,h-39,3); ctx.fill();
   ctx.fillStyle='#fff6c8'; ctx.fillRect(x-w/2+3,y-h/2+1,5,3); ctx.fillRect(x+w/2-8,y-h/2+1,5,3);
-  if(c.vy>60){                                              // brake lights
+  if(c.evy>60){                                             // brake lights
     ctx.fillStyle='rgba(255,40,30,.35)'; ctx.beginPath(); ctx.arc(x-w/2+5,y+h/2-2,6,0,Math.PI*2); ctx.arc(x+w/2-5,y+h/2-2,6,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#ff3b30'; ctx.fillRect(x-w/2+2,y+h/2-4,6,3); ctx.fillRect(x+w/2-8,y+h/2-4,6,3);
   }
@@ -822,198 +1022,388 @@ function drawCar(c,leader){
     ctx.fillStyle='rgba(255,179,0,.4)'; ctx.beginPath(); ctx.arc(x-w/2+2,y-h/2+5,7,0,Math.PI*2); ctx.arc(x-w/2+2,y+h/2-5,7,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#ffb300'; ctx.fillRect(x-w/2-1,y-h/2+2,5,6); ctx.fillRect(x-w/2-1,y+h/2-8,5,6);
   }
-  if(c===player){ ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; rr(x-w/2-3,y-h/2-3,w+6,h+6,9); ctx.stroke(); }
+  if(c===me){ ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; rr(x-w/2-3,y-h/2-3,w+6,h+6,9); ctx.stroke(); }
+  if(leader){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2.5; rr(x-w/2-5,y-h/2-5,w+10,h+10,10); ctx.stroke(); }
   if(c.state==='joining'){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2; ctx.setLineDash([5,4]); rr(x-w/2-6,y-h/2-6,w+12,h+12,10); ctx.stroke(); ctx.setLineDash([]); }
   ctx.font='800 11px Overpass, Arial, sans-serif'; ctx.textAlign='center';
-  const label=c.name, ly=y-h/2-(c===player?9:6);
+  const label=c.name, ly=y-h/2-(c===me||leader?10:6);
   ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(label,x+1,ly+1);
   ctx.fillStyle='#fff'; ctx.fillText(label,x,ly);
-  if(leader){ ctx.fillStyle='#f4c20d'; drawStar(x,ly-15,6.5); }
+  if(leader){
+    const bob=Math.sin(t*4)*2, sy=ly-19+bob;
+    ctx.fillStyle='rgba(0,0,0,.35)'; drawStar(x+1.5,sy+1.5,11); ctx.fill();
+    ctx.fillStyle='#f4c20d'; drawStar(x,sy,11); ctx.fill();
+    ctx.strokeStyle='#7a5a00'; ctx.lineWidth=1.5; ctx.stroke();
+  }
 }
 function render(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle=GRASS; ctx.fillRect(0,0,cvs.width,cvs.height);
+  const k=view.s*dpr;
+  ctx.setTransform(k,0,0,k,-view.L*k,-view.T*k);
   drawRoad(); drawEntry(); drawRoadLines();
   for(const o of obstacles) if(o.type==='pothole'||o.type==='cone'||o.type==='barrier') drawObstacle(o);
   for(const o of obstacles) if(o.type==='car'||o.type==='truck') drawObstacle(o);
-  const lead=leader();
-  for(const c of cars) if(c.state!=='dead'&&c!==player) drawCar(c,c===lead);
-  if(player&&player.state!=='dead') drawCar(player,player===lead);
+  for(const c of cars) if(c.state!=='dead'&&c!==me) drawCar(c,c.idx===leadIdx);
+  if(me&&me.state!=='dead') drawCar(me,me.idx===leadIdx);
   for(const p of parts){ ctx.globalAlpha=clamp(p.life*1.6,0,1); ctx.fillStyle=p.col; ctx.fillRect(p.x-3,p.y-3,6,6); }
   ctx.globalAlpha=1;
   if(touch.active && $('panel').hidden){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(touch.ox,touch.oy,45,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath();
     ctx.arc(touch.ox+touch.vx*45,touch.oy+touch.vy*45,14,0,Math.PI*2); ctx.fill();
   }
 }
-function leader(){
-  let b=null; for(const c of cars) if(c.state==='active'&&c.alive>3&&(!b||c.alive>b.alive)) b=c;
-  return b;
-}
+
+/* ============ HUD + leaderboard ============ */
 function updateHud(){
-  const l=leader(); $('lead').textContent=l?`${l.name} ${fmt(l.alive)}`:'—';
-  if(player&&player.state==='active'){ $('mineLabel').textContent='Your time'; $('mine').textContent=fmt(player.alive); }
-  else { $('mineLabel').textContent='Your best'; $('mine').textContent=fmt(best); }
+  const l=byIdx(leadIdx);
+  $('leadName').textContent=l?(l===me?'You':l.name):'nobody yet';
+  $('leadTime').textContent=l?fmt(l.alive):'';
+  $('hud').classList.toggle('me-lead',!!(l&&l===me));
+  if(me&&me.state==='active') $('mine').textContent=(l&&l!==me)?`You ${fmt(me.alive)} · take them down`:`Your run ${fmt(me.alive)}`;
+  else $('mine').textContent=`Your best ${fmt(best)}`;
   const m=$('merge');
-  if(player&&player.state==='joining'){
+  if(me&&me.state==='joining'){
     m.hidden=false;
-    const rem=CFG.joinWindow-player.joinT;
+    const rem=CFG.joinWindow-me.joinT;
     if(rem>0){ $('mergeText').textContent='Merge left'; $('mergeNum').textContent=Math.ceil(rem); m.classList.remove('urgent'); }
     else { $('mergeText').textContent='Ramp ending'; $('mergeNum').textContent=Math.max(0,Math.ceil(rem+CFG.joinGrace)); m.classList.add('urgent'); }
   } else m.hidden=true;
 }
+let boardTimer=0;
+function renderBoard(){
+  const rows=cars.map(c=>{
+    const on=c.state==='active', run=on?c.alive:0;
+    return {c,on,run,best:Math.max(c.best||0,run)};
+  }).sort((a,b)=>(b.on-a.on)||(b.run-a.run)||(b.best-a.best));
+  $('roomLbl').textContent=myIdx>=0?roomText():'—';
+  const rk=rows.findIndex(r=>r.c===me);
+  $('rank').textContent=me&&rk>=0?`#${rk+1} of ${rows.length}`:'';
+  $('board').innerHTML=rows.map((r,i)=>{
+    const c=r.c, lead=c.idx===leadIdx;
+    const status=r.on?fmt(r.run):c.state==='joining'?'merging':'out';
+    return `<li class="${c===me?'me ':''}${lead?'lead':''}">
+      <span class="rk">${lead?'★':i+1}</span><span class="dot" style="background:${esc(c.color)}"></span>
+      <span class="nm">${esc(c.name)}${c===me?' <i>(you)</i>':c.human?'':' <i>bot</i>'}</span>
+      <span class="tm ${r.on?'':'out'}">${status}<small>best ${fmt(r.best)} · ${c.kos} KO${c.crowns?` · ${c.crowns}★`:''}</small></span></li>`;
+  }).join('');
+}
 
-/* ============ Boot ============ */
-let scaleK=1;
+/* ============ Boot: layout ============ */
 function resize(){
-  const aw=document.body.clientWidth, ah=document.body.clientHeight;
-  const s=Math.min(aw/W,ah/H), cw=Math.floor(W*s), ch=Math.floor(H*s);
-  wrap.style.width=cw+'px'; wrap.style.height=ch+'px'; wrap.style.fontSize=Math.max(11,16*s)+'px';
-  const dpr=Math.min(2,window.devicePixelRatio||1);
-  cvs.width=Math.round(cw*dpr); cvs.height=Math.round(ch*dpr); scaleK=cw/W*dpr;
+  const r=wrap.getBoundingClientRect();
+  cssW=Math.max(1,r.width); cssH=Math.max(1,r.height);
+  dpr=Math.min(2,window.devicePixelRatio||1);
+  cvs.width=Math.round(cssW*dpr); cvs.height=Math.round(cssH*dpr);
+  wrap.style.fontSize=clamp(Math.min(cssW/480,cssH/800)*16,12,18)+'px';
 }
 addEventListener('resize',resize); resize();
+if(matchMedia('(max-width:820px)').matches) document.body.classList.add('board-closed');
+$('boardToggle').addEventListener('click',()=>{ document.body.classList.toggle('board-closed'); $('boardToggle').blur(); });
 
-/* ============ Multiplayer (PeerJS, host-authoritative) ============ */
-// Everyone on the same link shares one room. The first visitor to claim the room id becomes the host.
-// Add #something to the URL for a separate room (e.g. /#friday).
-const ROOM='bugbear-carlane-carnage-'+(location.hash.slice(1).toLowerCase().replace(/[^a-z0-9]/g,'')||'main');
-const HUMAN_COLORS=[PLAYER_COLOR,'#e0398b','#16b6c9','#f07a1a','#8e4dff','#1fc26b','#ffd23f','#ff4d4d','#ffffff','#7a5230'];
+/* ============ Multiplayer (PeerJS) ============ */
+// Rooms: each room is a PeerJS id "<base>-<n>". The first person to claim the id hosts that room
+// (their browser spawns traffic and runs the bots). When a room has CFG.roomCap players, newcomers
+// automatically try room n+1, and the first one there starts it. If a host leaves, the longest-standing
+// player takes over the same room id and everyone keeps driving.
+// Add #something to the URL for a private set of rooms (e.g. /#friday).
+// Add ?peer=host:port to use your own PeerJS server instead of the free public one.
+const BASE='bugbear-cc2-'+(location.hash.slice(1).toLowerCase().replace(/[^a-z0-9]/g,'')||'main');
+const roomId=n=>BASE+'-'+n;
+const PEER_OPTS=(()=>{
+  const q=new URLSearchParams(location.search), h=q.get('peer'), o={debug:0};
+  if(h){ const [host,port]=h.split(':'); Object.assign(o,{host,port:+port||443,path:q.get('peerpath')||'/',secure:q.get('peersecure')!=='0'}); }
+  return o;
+})();
 const peers=new Map();   // host only: peerId -> {conn, car, seen}
-let peer=null, hostConn=null, attempt=0, lastSnap=0, snapSeq=0, gotSeq=-1;
+let peer=null, hostConn=null, attempt=0, lastHostMsg=0, lastSend=0, lastMe=0, lastRos=0, lastReclaim=0;
+let pingTimer=null, syncSamples=[];
 
 const send=m=>{ if(hostConn&&hostConn.open) try{ hostConn.send(m); }catch(e){} };
-function broadcast(m){ for(const h of peers.values()) if(h.conn.open) try{ h.conn.send(m); }catch(e){} }
+function broadcast(m,skipBusy){
+  if(!isHost) return;
+  for(const h of peers.values()){
+    if(!h.conn.open) continue;
+    const dc=h.conn.dataChannel;
+    if(skipBusy&&dc&&dc.bufferedAmount>64*1024) continue;   // a slow link skips a frame instead of queueing lag
+    try{ h.conn.send(m); }catch(e){}
+  }
+}
+const secMsg=()=>({t:'sec',v:secVer,l:sections.map(s=>[r1(s.start),r1(s.end),s.lanes]),ns:r1(nextSpawn),os:obSeq});
+function rosMsg(){
+  rosVer++;
+  return {t:'ros',v:rosVer,room:roomNo,h:hostIdx,
+    l:cars.map(c=>[c.idx,c.id,c.name,c.color,c.human?1:0,r1(c.best),c.kos,c.crowns,c.join])};
+}
 
 function connect(){
   const my=++attempt;
   if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
-  setStatus(my>2?'Still trying to connect…':'Connecting…');
-  const retry=ms=>setTimeout(()=>{ if(my===attempt&&!isHost&&mode!=='gone') connect(); },ms);
-  const p=peer=new Peer(ROOM,{debug:0});
+  setStatus(`Looking for a seat in room ${roomNo}…`);
+  const p=peer=new Peer(roomId(roomNo),PEER_OPTS);
   p.on('open',()=>{ if(my===attempt) becomeHost(p); });
   p.on('error',e=>{
     if(my!==attempt||isHost) return;
     try{ p.destroy(); }catch(_){}
-    if(e.type==='unavailable-id') joinAsClient(my,retry);   // someone is already hosting
-    else { setStatus('Connection problem, retrying…'); retry(2500); }
+    if(e.type==='unavailable-id') joinAsClient(my);   // someone already hosts this room
+    else { setStatus('Connection problem, retrying…'); retry(my,2500); }
   });
 }
-function joinAsClient(my,retry){
-  const p=peer=new Peer({debug:0});
-  p.on('open',id=>{
+const retry=(my,ms)=>setTimeout(()=>{ if(my===attempt&&!isHost&&!hostConn) connect(); },ms);
+function joinAsClient(my){
+  const p=peer=new Peer(PEER_OPTS);
+  p.on('open',()=>{
     if(my!==attempt) return;
-    myId=id;
-    const c=p.connect(ROOM,{serialization:'json'});
-    const to=setTimeout(()=>{ if(!hostConn){ try{ p.destroy(); }catch(_){} retry(0); } },9000);
-    c.on('open',()=>{ if(my!==attempt) return; clearTimeout(to); hostConn=c; lastSnap=performance.now(); c.send({t:'hello',name:myName}); setStatus('Joined. Waiting for the lobby…'); });
-    c.on('data',onHostData);
-    c.on('close',()=>{ if(hostConn===c) hostGone(); });
+    const c=p.connect(roomId(roomNo),{serialization:'json',reliable:true});   // ordered: the road updates must arrive in order
+    const to=setTimeout(()=>{ if(hostConn!==c&&my===attempt){ try{ p.destroy(); }catch(_){} retry(my,0); } },9000);
+    c.on('open',()=>{
+      if(my!==attempt) return;
+      clearTimeout(to); hostConn=c; lastHostMsg=performance.now();
+      c.send({t:'hi',name:myName,idx:myIdx>=0?myIdx:null,me:me?packMe(me):null});
+      startPings();
+    });
+    c.on('data',m=>{ if(hostConn===c) onHostData(m); });
+    c.on('close',()=>{ if(hostConn===c) lostHost(); });
     c.on('error',()=>{});
   });
   p.on('error',e=>{
     if(my!==attempt||hostConn) return;
     try{ p.destroy(); }catch(_){}
-    retry(e.type==='peer-unavailable'?300:2500);   // host vanished: we may become the host now
+    retry(my,e.type==='peer-unavailable'?300:2500);   // host vanished: we may become the host now
   });
 }
 
 /* ---- host side ---- */
 function becomeHost(p){
-  isHost=true; myId=ROOM;
-  // The road is already running when you arrive.
-  for(let i=0;i<CFG.lobbySize-1;i++){
-    const c=newBot(); cars.push(c);
-    if(i<3){ Object.assign(c,{state:'active',x:CX+(i-1)*LW*1.4,y:rand(470,650),alive:rand(20,140)}); }
-    else c.respawnAt=rand(1,5);
+  const fresh=myIdx<0;
+  isHost=true; hostConn=null; stopPings();
+  if(fresh){
+    clockOff=-performance.now()/1000; t=lastT=now(); travel=0;
+    sections=[]; obstacles=[]; cars=[]; obSeq=0; nextSpawn=H+260;
+    me=addHuman(p.id,myName); me.local=true; myIdx=me.idx;
+    balanceBots();
+    cars.filter(c=>c.brain).slice(0,3).forEach((c,i)=>Object.assign(c,{state:'active',x:CX+(i-1)*LW*1.1,y:rand(470,650),alive:rand(8,60)}));  // the road is already busy
+    extendSections();
+    titlePanel();
+  } else {
+    // Taking over a running room: keep the road, the traffic and everyone's cars exactly where they are.
+    cars=cars.filter(c=>c.idx!==hostIdx);
+    for(const c of cars){
+      if(!c.human){ c.local=true; c.brain=freshBrain(); c.buf=[]; if(c.state==='dead') c.respawnAt=t+rand(.5,2); usedNames.add(c.name); }
+      else if(c!==me) c.orphan=performance.now();         // dropped if they don't reconnect
+    }
+    for(const o of obstacles) obSeq=Math.max(obSeq,o.id);
+    me.id=p.id;
+    carSeq=Math.max(carSeq,...cars.map(c=>c.idx)); joinSeq=Math.max(joinSeq,...cars.map(c=>c.join));
+    toast('The host left. You are hosting this room now.');
+    balanceBots();
   }
-  extendSections();
-  player=addHuman(myId,myName);
+  hostIdx=me.idx;
   p.on('connection',c=>{
     c.on('data',m=>onClientData(c,m));
     c.on('close',()=>dropHuman(c.peer));
     c.on('error',()=>{});
   });
-  p.on('disconnected',()=>setTimeout(()=>{ if(!p.destroyed) try{ p.reconnect(); }catch(e){} },1500)); // keep the room id so new people can find us
-  syncLobby();
+  p.on('disconnected',()=>setTimeout(()=>{ if(!p.destroyed&&peer===p) try{ p.reconnect(); }catch(e){} },1500)); // keep the room id so new people can find us
+  // Lost the room id while briefly offline and someone else claimed it: fold this room into theirs
+  // instead of leaving two games that both think they are "room N".
+  p.on('error',e=>{ if(peer===p&&isHost&&e.type==='unavailable-id') handOff(); });
+  rosterDirty=true; recut();
+}
+function handOff(){
+  broadcast({t:'bye'});
+  for(const h of peers.values()) try{ h.conn.close(); }catch(e){}
+  peers.clear(); isHost=false;
+  for(const c of cars) if(c.brain){ c.local=false; c.brain=null; c.buf=[]; }
+  toast('Merging into the other host\'s room…');
+  const my=++attempt;
+  setTimeout(()=>{ if(my===attempt&&!isHost&&!hostConn) connect(); },300+Math.random()*500);
 }
 function addHuman(id,name){
   name=String(name||'').trim().slice(0,14)||'Player';
-  let n=name,k=2; while(cars.some(c=>c.isPlayer&&c.name===n)) n=name.slice(0,11)+' '+(k++);
-  const used=new Set(cars.filter(c=>c.isPlayer).map(c=>c.color));
+  let n=name,k=2; while(cars.some(c=>c.name===n)) n=name.slice(0,11)+' '+(k++);
+  const used=new Set(cars.filter(c=>c.human).map(c=>c.color));
   const color=HUMAN_COLORS.find(c=>!used.has(c))||NAMES[ri(NAMES.length)][1];
-  const car={id,name:n,color,isPlayer:true,state:'dead',x:0,y:0,vx:0,vy:0,joinT:0,alive:0,ix:0,iy:0};
-  cars.push(car); balanceBots(); return car;
+  const car=mkCar(++carSeq,id,n,color,true); car.join=++joinSeq;
+  cars.push(car); return car;
 }
-// Bots fill the road up to CFG.lobbySize cars; real players replace them.
+// Bots top the road up for small rooms (see CFG.bots); real players replace them.
 function balanceBots(){
-  const want=Math.max(0,CFG.lobbySize-cars.filter(c=>c.isPlayer).length);
-  let bots=cars.filter(c=>!c.isPlayer);
+  const want=CFG.bots(humans());
+  let bots=cars.filter(c=>!c.human);
   while(bots.length>want){ const b=bots.find(c=>c.state==='dead')||bots[0]; usedNames.delete(b.name); cars.splice(cars.indexOf(b),1); bots=bots.filter(x=>x!==b); }
   while(bots.length<want){ const b=newBot(); b.respawnAt=t+rand(1,4); cars.push(b); bots.push(b); }
+  rosterDirty=true;
+  recut();                                   // no-op unless the lane count has to change
 }
 function onClientData(c,m){
   if(!m||typeof m!=='object') return;
   let h=peers.get(c.peer);
-  if(m.t==='hello'){
-    if(!h){ h={conn:c,car:addHuman(c.peer,m.name)}; peers.set(c.peer,h); }
-    h.seen=performance.now(); syncLobby(); return;
+  if(m.t==='hi'){
+    if(!h){
+      let car=m.idx!=null?cars.find(x=>x.idx===m.idx&&x.human&&!x.local&&x.orphan):null;   // back after a host change
+      if(!car){
+        if(humans()>=CFG.roomCap){ try{ c.send({t:'full'}); }catch(e){} setTimeout(()=>{ try{c.close();}catch(e){} },800); return; }
+        car=addHuman(c.peer,m.name);
+      }
+      car.id=c.peer; car.orphan=0;
+      h={conn:c,car,seen:performance.now()}; peers.set(c.peer,h);
+      if(Array.isArray(m.me)){ const e=unpackMe(m.me); car.buf=[]; pushRemote(car,e); car.last=m.me; }
+      c.send({t:'w',you:car.idx,room:roomNo,T:r3(now()),sec:secMsg(),ob:obstacles.map(packOb),ros:rosMsg()});
+      balanceBots(); rosterDirty=true;
+    }
+    return;
   }
   if(!h) return;
   h.seen=performance.now();
-  if(m.t==='in'){ h.car.ix=clamp(+m.x||0,-1,1); h.car.iy=clamp(+m.y||0,-1,1); }
-  else if(m.t==='join'&&started) h.car.pending=true;
+  if(m.t==='me'&&Array.isArray(m.s)){ const e=unpackMe(m.s); if(e.s>now()+1) e.s=now(); pushRemote(h.car,e); h.car.last=m.s; }
+  else if(m.t==='pi') try{ c.send({t:'po',c:m.c,T:r3(now())}); }catch(e){}
+  else if(m.t==='ko') onKO(h.car.idx,String(m.r||'Crashed').slice(0,40),m.by,+m.run||0);
   else if(m.t==='bye') dropHuman(c.peer);
+}
+function onKO(vIdx,reason,byI,run){
+  const v=byIdx(vIdx); if(!v) return;
+  const wasLead=leadIdx===vIdx;
+  v.best=Math.max(v.best,run);
+  const k=byI!=null?byIdx(byI):null;
+  if(k&&k!==v){ k.kos++; if(wasLead) k.crowns++; }
+  if(wasLead) leadIdx=-1;
+  const m={t:'ko',v:vIdx,vn:v.name,r:reason,by:k&&k!==v?k.idx:null,bn:k&&k!==v?k.name:'',lead:wasLead?1:0,run:r1(run),hu:v.human||(k&&k.human)?1:0};
+  broadcast(m); showKO(m); rosterDirty=true;
+}
+function showKO(m){
+  if(!m.hu&&!m.lead) return;                                  // bots wrecking bots is not news
+  const mine=me&&m.by===me.idx, vict=me&&m.v===me.idx;
+  const V=vict?'You':esc(m.vn), B=mine?'You':esc(m.bn);
+  if(m.lead&&m.bn){ toast(`★ ${B} took down the leader ${vict?'(you)':V}!`,true); if(mine) SFX.crown(); }
+  else if(m.bn) toast(`${B} shoved ${V} out · ${esc(m.r)}`,mine);
+  else if(m.lead) toast(`★ Leader ${V} is out · ${esc(m.r)}`);
+  else if(!vict) toast(`${V} · ${esc(m.r)}`);
 }
 function dropHuman(id){
   const h=peers.get(id); if(!h) return;
   peers.delete(id); try{ h.conn.close(); }catch(e){}
   const i=cars.indexOf(h.car); if(i>=0) cars.splice(i,1);
-  balanceBots(); syncLobby();
+  balanceBots();
 }
-function syncLobby(){
-  lobbyList=cars.filter(c=>c.isPlayer).map(c=>({id:c.id,name:c.name}));   // host is always first
-  broadcast({t:'lobby',list:lobbyList,started});
-  lobbyPanel();
-}
-function startGame(){ started=true; syncLobby(); enterGame(); }
-const r=Math.round;
-function snapshot(){
-  return {t:'s',q:++snapSeq,T:+t.toFixed(3),tr:+travel.toFixed(1),
-    sec:sections.map(s=>[r(s.start),r(s.end),s.lanes]),
-    ob:obstacles.map(o=>[TYPES.indexOf(o.type),r(o.x),+o.d.toFixed(1),o.fwd,o.ci|0,o.tx===undefined?null:r(o.tx),r(o.trig||0),o.moved?1:0]),
-    cars:cars.map(c=>[c.id,c.name,c.color,c.state,r(c.x),r(c.y),r(c.vx),r(c.vy),+c.joinT.toFixed(2),+c.alive.toFixed(2),+(c.lastRun||0).toFixed(2),c.state==='dead'?c.reason||'':''])};
+function hostTick(nowMs){
+  if(nowMs-lastSend>=1000/CFG.sendHz){
+    lastSend=nowMs;
+    leadIdx=computeLeader();
+    const T=r3(t);
+    broadcast({t:'s',T,L:leadIdx,c:cars.map(c=>c.local?[c.idx,...packMe(c)]:(c.last?[c.idx,...c.last]:null)).filter(Boolean)},true);
+  }
+  if(rosterDirty&&nowMs-lastRos>250){ rosterDirty=false; lastRos=nowMs; broadcast(rosMsg()); }
+  for(const [id,h] of peers) if(nowMs-h.seen>6000) dropHuman(id);                 // left without saying goodbye
+  if(nowMs-lastReclaim>5000){ lastReclaim=nowMs; if(peer&&peer.disconnected&&!peer.destroyed) try{ peer.reconnect(); }catch(e){} }  // stay findable
+  const orphans=cars.filter(c=>c.orphan&&nowMs-c.orphan>12000);
+  if(orphans.length){ cars=cars.filter(c=>!orphans.includes(c)); balanceBots(); }
 }
 
 /* ---- client side ---- */
 function onHostData(m){
   if(!m||typeof m!=='object') return;
-  lastSnap=performance.now();
-  if(m.t==='bye'){ hostGone(); return; }
-  if(m.t==='lobby'){ lobbyList=m.list||[]; started=!!m.started; if(started) enterGame(); else lobbyPanel(); }
-  else if(m.t==='s') applySnap(m);
+  lastHostMsg=performance.now();
+  switch(m.t){
+    case 'full':
+      hostConn=null; stopPings(); roomNo++;
+      setStatus(`Room ${roomNo-1} is full. Opening room ${roomNo}…`);
+      connect(); return;
+    case 'w': return onWelcome(m);
+    case 's': return onState(m);
+    case 'po': return onPong(m);
+    case 'ob':
+      for(const a of m.l) if(!obstacles.some(o=>o.id===a[0])){ const o=unpackOb(a), q=obPos(o,t); o.x=q[0]; o.y=q[1]; o.d=q[2]; obstacles.push(o); }
+      obSeq=Math.max(obSeq,...m.l.map(a=>a[0])); return;
+    case 'rm': { const s=new Set(m.ids); obstacles=obstacles.filter(o=>!s.has(o.id)); return; }
+    case 'sec': return onSections(m);
+    case 'ros': return onRoster(m);
+    case 'ko': return showKO(m);
+    case 'bye': return lostHost();
+  }
 }
-function applySnap(m){
-  if(m.q<=gotSeq) return; gotSeq=m.q;   // messages can arrive out of order
-  t=m.T; travel=m.tr;
-  sections=m.sec.map(a=>({start:a[0],end:a[1],lanes:a[2]}));
-  obstacles=m.ob.map(a=>{
-    const type=TYPES[a[0]]||'pothole', sz=SZ[type];
-    const o={type,x:a[1],d:a[2],w:sz[0],h:sz[1],fwd:a[3],ci:a[4],col:TRAFFIC[a[4]]||TRAFFIC[0],y:yOf(a[2])};
-    if(a[5]!==null){ o.tx=a[5]; o.trig=a[6]; o.moved=!!a[7]; }
-    return o;
-  });
-  const prev=new Map(cars.map(c=>[c.id,c.state])), crashed=[];
-  cars=m.cars.map(a=>{
-    const c={id:a[0],name:a[1],color:a[2],state:a[3],x:a[4],y:a[5],vx:a[6],vy:a[7],joinT:a[8],alive:a[9],lastRun:a[10],reason:a[11]};
-    const ps=prev.get(c.id); if(ps&&ps!=='dead'&&c.state==='dead') crashed.push(c);
-    return c;
-  });
-  player=cars.find(c=>c.id===myId)||null;
-  crashed.forEach(boom);
+function onWelcome(m){
+  const first=myIdx<0;
+  const est=m.T-performance.now()/1000;
+  if(first||Math.abs(est-clockOff)>1){ clockOff=est; t=lastT=now(); travel=CFG.scroll*t; syncSamples=[]; }
+  roomNo=m.room;
+  secVer=-1; onSections(m.sec);
+  obstacles=m.ob.map(unpackOb); placeObstacles(t);
+  rosVer=-1;
+  if(me&&m.you!==myIdx) me.idx=m.you;                     // new host gave us a new number
+  myIdx=m.you;
+  onRoster(m.ros);
+  if(first){ setStatus(''); titlePanel(); }
+  else toast(`Reconnected to room ${roomNo}.`);
+}
+function onSections(m){
+  if(m.v<=secVer) return; secVer=m.v;
+  sections=m.l.map(a=>({start:a[0],end:a[1],lanes:a[2]}));
+  nextSpawn=m.ns; obSeq=Math.max(obSeq,m.os||0);
+}
+function onRoster(m){
+  if(m.v<=rosVer) return; rosVer=m.v;
+  roomNo=m.room; hostIdx=m.h;
+  const keep=new Set();
+  for(const [idx,id,name,color,human,bst,kos,crowns,join] of m.l){
+    let c=byIdx(idx);
+    if(!c){
+      if(idx===myIdx&&me){ c=me; }
+      else { c=mkCar(idx,id,name,color,!!human); cars.push(c); }
+    }
+    if(idx===myIdx&&!me){ me=c; }
+    if(c===me){ c.local=true; c.brain=null; }
+    Object.assign(c,{id,name,color,human:!!human,best:bst,kos,crowns,join});
+    keep.add(c);
+  }
+  if(me&&!keep.has(me)) keep.add(me);
+  cars=cars.filter(c=>keep.has(c));
+}
+function onState(m){
+  leadIdx=m.L;
+  for(const a of m.c){
+    const idx=a[0]; if(idx===myIdx) continue;
+    const c=byIdx(idx); if(!c||c.local) continue;
+    pushRemote(c,unpackMe(a.slice(1)));
+  }
+}
+function startPings(){
+  stopPings();
+  let n=0;
+  const ping=()=>{ send({t:'pi',c:performance.now()}); n++; pingTimer=setTimeout(ping,n<5?200:2000); };
+  ping();
+}
+function stopPings(){ if(pingTimer) clearTimeout(pingTimer); pingTimer=null; }
+// Clock sync: keep the lowest-latency recent sample and drift towards it, so the road never visibly jumps.
+function onPong(m){
+  const pn=performance.now(), rtt=(pn-m.c)/1000; if(rtt<0||rtt>3) return;
+  const est=m.T+rtt/2-pn/1000;
+  syncSamples.push({rtt,est}); if(syncSamples.length>8) syncSamples.shift();
+  const bestS=syncSamples.reduce((a,b)=>b.rtt<a.rtt?b:a);
+  const err=bestS.est-clockOff;
+  if(Math.abs(err)>.25) clockOff=bestS.est; else clockOff+=err*.25;
+}
+function lostHost(){
+  if(isHost) return;
+  const c=hostConn; hostConn=null; stopPings(); try{ c&&c.close(); }catch(e){}
+  if(myIdx<0){ connect(); return; }
+  toast('The host left. Handing the room over…');
+  cars=cars.filter(x=>x.idx!==hostIdx||x===me);
+  const order=cars.filter(x=>x.human).sort((a,b)=>a.join-b.join), rank=Math.max(0,order.indexOf(me));
+  const my=++attempt;
+  setTimeout(()=>{ if(my===attempt&&!isHost&&!hostConn) connect(); }, rank===0?150:1200+rank*400);   // the longest-standing player claims it first
+}
+function clientTick(nowMs){
+  if(!hostConn) return;
+  const rate=me&&me.state!=='dead'?CFG.meHz:4;
+  if(me&&nowMs-lastMe>=1000/rate){ lastMe=nowMs; send({t:'me',s:packMe(me)}); }
+  if(nowMs-lastHostMsg>5000) lostHost();
 }
 
-/* ============ Boot ============ */
+/* ============ Main loop ============ */
 namePanel();
 ['pointerdown','keydown','click'].forEach(ev=>addEventListener(ev,()=>{ if(!SFX.muted) SFX.init(); },{capture:true}));
 const sndBtn=$('snd');
@@ -1022,34 +1412,34 @@ sndBtn.addEventListener('click',()=>{ SFX.setMuted(!SFX.muted); paintSnd(); sndB
 addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT') return; if(e.key==='m'||e.key==='M'){ SFX.setMuted(!SFX.muted); paintSnd(); } });
 paintSnd();
 
-let last=performance.now(), lastSend=0, lastIn='';
-function step(now){
-  const dt=Math.min(document.hidden?1:.05,Math.max(0,(now-last)/1000)); last=now;
+let lastFrame=performance.now();
+function step(){
+  const nowMs=performance.now(), dt=Math.min(.1,Math.max(0,(nowMs-lastFrame)/1000)); lastFrame=nowMs;
   readInput();
-  if(isHost){
-    if(player){ player.ix=inp.x; player.iy=inp.y; }
-    const steps=Math.ceil(dt/(1/60)); for(let i=0;i<steps;i++) update(dt/steps);
-    if(now-lastSend>=50){ lastSend=now; if(peers.size) broadcast(snapshot()); }     // ~20 snapshots a second
-    for(const [id,h] of peers) if(now-h.seen>10000) dropHuman(id);               // left without saying goodbye
-  } else if(hostConn){
-    extrapolate(dt);
-    const k=inp.x+','+inp.y;
-    if((k!==lastIn&&now-lastSend>=33)||now-lastSend>=250){ lastIn=k; lastSend=now; send({t:'in',x:inp.x,y:inp.y}); }
-    if(now-lastSnap>10000) hostGone();
-  }
-  watchMe(dt);
+  const T=now();
+  for(const c of cars) if(!c.local) sampleRemote(c,T-c.delay);
+  simulate(T);
+  placeObstacles(t);
+  if(isHost) hostTick(nowMs); else clientTick(nowMs);
+  watchMe(dt); tickEffects(dt);
   return dt;
 }
-function frame(now){
-  const dt=step(now);
+function frame(){
+  const dt=step();
   hudTimer-=dt; if(hudTimer<=0){ updateHud(); hudTimer=.1; }
-  SFX.drive(mode==='playing'&&!!player&&player.state!=='dead', inp.x, inp.y);
-  ctx.setTransform(scaleK,0,0,scaleK,0,0); render();
+  boardTimer-=dt; if(boardTimer<=0){ renderBoard(); boardTimer=.25; }
+  SFX.drive(mode==='playing'&&!!me&&me.state!=='dead', inp.x, inp.y);
+  updateCamera(dt); render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 addEventListener('pagehide',()=>{ if(isHost) broadcast({t:'bye'}); else send({t:'bye'}); });   // tell the others right away
-setInterval(()=>{ if(document.hidden) step(performance.now()); },250);   // keep the room alive in a background tab
+// Browsers throttle hidden tabs hard (timers can drop to once a minute). A worker's timer is not
+// throttled that way, so it keeps the room (and your car) ticking while the tab is in the background.
+try{
+  const w=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),50)'],{type:'text/javascript'})));
+  w.onmessage=()=>{ if(document.hidden) step(); };
+}catch(e){ setInterval(()=>{ if(document.hidden) step(); },250); }
 })();
 </script>
 </body>
