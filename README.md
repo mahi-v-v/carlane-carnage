@@ -9,11 +9,12 @@ Multiplayer top-down merge-and-survive game. Static site, no backend to run.
 
 ## How it plays
 - The road never ends. Enter a name, get a seat in a room, join from the on-ramp, survive.
-- **Leader**: whoever has the longest current run (over 3 s) is the leader. They get a gold star over their car,
-  a glow, and their name in the sign at the top. The goal is to take them down.
-- **Shoving**: drive sideways (or into the back of) another car to shove it. The car you hit gets knocked and loses grip for a moment.
-  If it crashes within 3 s (pothole, traffic, barrier, or slammed into the guardrail), the knockout (KO) is yours.
-  Taking out the leader also earns a crown (★) on the leaderboard. Aggressive bots hunt the leader too.
+- **Leader**: whoever has the longest current run (over 3 s) is the leader. They get a small gold star on their car's roof
+  and their name in the sign at the top. The goal is to take them down.
+- **Blocking, no pushing**: cars are solid. You can't drive through another car, and nobody can shove you: a car that drives
+  into you just stops at your bumper. So you win by getting in the way. If someone runs into you and then crashes within 2 s
+  (pothole, traffic, barrier, or the on-ramp running out), the knockout (KO) is yours.
+  Taking out the leader also earns a crown (★) on the leaderboard. Aggressive bots try to box the leader in too.
 - **Leaderboard** on the side: everyone's current run, best run, KOs and crowns. On phones it's behind the "Board" button.
 
 ## Rooms
@@ -37,4 +38,4 @@ Multiplayer top-down merge-and-survive game. Static site, no backend to run.
   screen. The host only sends new obstacles once; after that every screen computes them itself. Each player drives
   their own car locally (no input lag) and sends its position; other cars are drawn ~0.1 s in the past and smoothly
   interpolated, with the delay adapting to each connection.
-- Tunables (room size, bots, lanes, speeds, shove timing) are in `CFG` at the top of the script in `public/index.html`.
+- Tunables (room size, bots, lanes, speeds, block-KO timing) are in `CFG` at the top of the script in `public/index.html`.

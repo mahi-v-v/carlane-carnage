@@ -98,7 +98,7 @@ input::placeholder{color:rgba(255,255,255,.6)}
 <aside id="side" aria-label="Leaderboard">
   <div class="sign"><div class="in"><h3><span>Leaderboard</span><small id="roomLbl">—</small></h3></div></div>
   <ol id="board"></ol>
-  <p class="legend">Big number: current run. Small: best run and knockouts (KO). ★ is the leader: shove them into trouble to take the crown.</p>
+  <p class="legend">Big number: current run. Small: best run and knockouts (KO). ★ is the leader: block them into trouble to take the crown.</p>
 </aside>
 <button id="boardToggle" type="button" aria-controls="side">Board</button>
 <div id="wrap">
@@ -128,7 +128,8 @@ const CFG = {
   joinGrace: 2,        // seconds while it closes
   botSkill: [0.55, 0.95],
   bots: humans => humans>=4 ? 0 : 5-humans,   // solo: 4 bots, duo: 3, trio: 2, 4+ players: none
-  shoveCredit: 3,      // seconds after a shove that a crash still counts as your knockout
+  blockCredit: 2,      // seconds after another car blocks you that a crash still counts as their knockout (0 = off)
+  separate: 80,        // px/s: how gently two overlapping cars (network lag, narrowing road) drift apart
   sendHz: 20,          // host → everyone: car positions per second
   meHz: 30,            // you → host: your own car per second
 };
@@ -377,7 +378,7 @@ function spawnNext(){
 
 /* ============ Cars ============ */
 function mkCar(idx,id,name,color,human){
-  return {idx,id,name,color,human,local:false,state:'dead',x:0,y:0,vx:0,vy:0,evx:0,evy:0,kx:0,ky:0,
+  return {idx,id,name,color,human,local:false,state:'dead',x:0,y:0,vx:0,vy:0,evx:0,evy:0,
     joinT:0,alive:0,best:0,kos:0,crowns:0,join:0,respawnAt:0,brain:null,buf:[],lag:.1,jit:.02,delay:.12,
     hitBy:null,hitAt:-9,ix:0,iy:0,pending:false,lastRun:0};
 }
@@ -399,7 +400,7 @@ function startJoin(c){
     const y=(k===0&&c.human)?H-110:rand(ETOP+HH+30,YMAX-10), x=roadRAt(y)+EG+EW/2;
     const clear=!cars.some(o=>o!==c&&o.state!=='dead'&&Math.abs(o.x-x)<CW+2&&Math.abs(o.y-y)<CH+6);
     if(clear){
-      Object.assign(c,{state:'joining',x,y,vx:0,vy:0,evx:0,evy:0,kx:0,ky:0,joinT:0,alive:0,hitBy:null});
+      Object.assign(c,{state:'joining',x,y,vx:0,vy:0,evx:0,evy:0,joinT:0,alive:0,hitBy:null});
       if(c.brain){ c.brain.wait=rand(.5,2); c.brain.next=0; c.brain.tx=x; c.brain.ty=y; }
       return true;
     }
@@ -415,50 +416,42 @@ function xBounds(c,y){
 }
 const yBounds=c=>c.state==='joining'?[ETOP+HH,YMAX]:[YMIN,YMAX];
 
-// Car-on-car contact. Each car resolves its OWN side of the bump (the host does bots, each player does
-// their own car), so everyone agrees without a round trip. Whoever is moving into the other does the
-// shoving: the car being hit takes most of the push plus a sideways kick that can carry it into trouble.
-function bump(c,nx,ny,vx,vy){
+// Car-on-car contact is BLOCKING only: you can't drive through another car, but nobody gets shoved.
+// Each machine resolves only the cars it drives (the host does bots, each player does their own car):
+// a car that moves into another is stopped at its bumper, and the car it touched never moves.
+// Leftover overlap (network lag, or two cars squeezed by a narrowing road) eases apart slowly, so it
+// can never be used as a push.
+function bump(c,ox,oy,nx,ny,dt){
   for(const o of cars){
     if(o===c||o.state==='dead') continue;
     const dx=nx-o.x, dy=ny-o.y, px=CW-Math.abs(dx), py=CH-Math.abs(dy);
     if(px<=0||py<=0) continue;
     const ramp=c.state==='joining'&&o.state==='joining';        // the ramp is one car wide: separate front-to-back
-    if(px<py&&!ramp){
-      const dir=dx!==0?Math.sign(dx):(c.idx>o.idx?1:-1);
-      const mine=Math.max(0,-vx*dir), his=Math.max(0,o.evx*dir);
-      const share=Math.max(clamp((his+10)/(mine+his+20),.04,.96),(px-10)/px);   // never sink more than ~10px into a car
-      nx+=dir*px*share;
-      if(his>90&&his>mine){ c.kx=dir*clamp(his*1.6,260,460); c.hitBy=o.idx; c.hitAt=t; if(c===me) SFX.bump(1); else if(o===me) SFX.bump(.6); }
-    } else {
-      const dir=dy!==0?Math.sign(dy):(c.idx>o.idx?1:-1);
-      const mine=Math.max(0,-vy*dir), his=Math.max(0,o.evy*dir);
-      const share=Math.max(clamp((his+10)/(mine+his+20),.04,.96),(py-10)/py);
-      ny+=dir*py*share;
-      if(his>90&&his>mine){ c.ky=dir*clamp(his*1.3,200,400); c.hitBy=o.idx; c.hitAt=t; if(c===me) SFX.bump(.8); else if(o===me) SFX.bump(.5); }
+    const lat=px<py&&!ramp, pen=lat?px:py, d=lat?dx:dy;
+    const dir=d!==0?Math.sign(d):(c.idx>o.idx?1:-1);
+    const into=Math.max(0,-(lat?nx-ox:ny-oy)*dir);              // how far I drove into them this step
+    const fix=Math.min(pen,into+CFG.separate*dt);
+    if(lat) nx+=dir*fix; else ny+=dir*fix;
+    // Driving into a car that won't move = you were blocked. If you crash soon after, the KO is theirs.
+    const push=Math.max(0,-(lat?c.vx:c.vy)*dir);
+    if(push>90){
+      const fresh=c.hitBy!==o.idx||t-c.hitAt>.5;
+      c.hitBy=o.idx; c.hitAt=t;
+      if(fresh){ if(c===me) SFX.bump(.7); else if(o===me) SFX.bump(.45); }
     }
   }
   return [nx,ny];
 }
 function moveCar(c,dt){
-  const ctl=clamp(1-Math.hypot(c.kx,c.ky)/320,.2,1);          // just got rammed: you lose grip for a moment
-  const vx=c.vx*ctl+c.kx, vy=c.vy*ctl+c.ky, ox=c.x, oy=c.y;
-  const k=Math.exp(-dt*4.5); c.kx*=k; c.ky*=k;
-  if(Math.abs(c.kx)<5) c.kx=0; if(Math.abs(c.ky)<5) c.ky=0;
+  const ox=c.x, oy=c.y;
   const [ylo,yhi]=yBounds(c);
-  let ny=clamp(c.y+vy*dt,ylo,yhi);
+  let ny=clamp(c.y+c.vy*dt,ylo,yhi);
   let [lo,hi]=xBounds(c,ny);
-  let nx=clamp(c.x+vx*dt,lo,Math.max(lo,hi));
-  [nx,ny]=bump(c,nx,ny,vx,vy);
+  let nx=clamp(c.x+c.vx*dt,lo,Math.max(lo,hi));
+  [nx,ny]=bump(c,ox,oy,nx,ny,dt);
   ny=clamp(ny,ylo,yhi);
   [lo,hi]=xBounds(c,ny);
-  if(c.state==='active'){
-    // Shoved hard into the guardrail = wreck
-    const shoved=c.hitBy!==null&&t-c.hitAt<.8;
-    if(shoved&&((nx<lo-1&&c.kx<-80)||(nx>hi+1&&c.kx>80))){ c.x=clamp(nx,lo,hi); c.y=ny; crash(c,'Slammed into the guardrail'); return; }
-    nx=clamp(nx,lo,hi);                                     // a narrowing road always wins
-  } else if(nx>hi) nx=hi;                                   // closing on-ramp nudges you in
-  else if(nx<lo) nx=lo;
+  nx=clamp(nx,lo,Math.max(lo,hi));                           // the road edge (and a narrowing road) always wins
   c.x=nx; c.y=ny;
   // Report what the car actually did, not what the stick asked for: a car pinned against a wall is not
   // moving, and telling other screens otherwise makes them draw it sliding through the wall and snapping back.
@@ -477,9 +470,9 @@ function boom(c){
 // Only called for cars this machine drives (bots + host's car on the host, your own car on your screen)
 function crash(c,reason){
   if(c.state==='dead') return;
-  const by=(c.hitBy!==null&&t-c.hitAt<CFG.shoveCredit&&byIdx(c.hitBy))?c.hitBy:null;
+  const by=(c.hitBy!==null&&t-c.hitAt<CFG.blockCredit&&byIdx(c.hitBy))?c.hitBy:null;
   c.lastRun=c.state==='active'?c.alive:0; c.reason=reason; c.by=by;
-  c.state='dead'; c.kx=c.ky=0; c.hitBy=null;
+  c.state='dead'; c.hitBy=null;
   boom(c);
   if(c.brain){ usedNames.delete(c.name); c.respawnAt=t+rand(1.5,4); }
   if(isHost) onKO(c.idx,reason,by,c.lastRun);
@@ -513,7 +506,7 @@ function botThink(c){
   const obs=obstacles.filter(o=>o.y>-450&&o.y<H+80);
   const others=cars.filter(o=>o!==c&&o.state!=='dead');
   const joiners=others.filter(o=>o.state==='joining');
-  const L=byIdx(leadIdx), hunt=L&&L!==c&&L.state==='active'&&b.aggr>.55;   // aggressive bots go after the leader
+  const L=byIdx(leadIdx), hunt=L&&L!==c&&L.state==='active'&&b.aggr>.55;   // aggressive bots try to box the leader in
   let best=null, bestCost=1e9;
   const tryCand=(px,py,extra)=>{
     const dist=Math.hypot(px-c.x,py-c.y), ta=dist/sp;
@@ -525,7 +518,12 @@ function botThink(c){
     if(Math.abs(px-CX)>half-HW+1) cost+=6;                              // road narrowing ahead
     for(const o of others){
       const dx=Math.abs(o.x-px), dy=Math.abs(o.y-py);
-      if(hunt&&o===L){ if(dx<CW+10&&dy<CH*.7) cost-=2.2*b.aggr; continue; }
+      if(hunt&&o===L){                                                   // sit just ahead of the leader, in their lane
+        const ahead=o.y-py;
+        if(dx<CW*.6&&ahead>CH-2&&ahead<CH+40) cost-=2.2*b.aggr;
+        else if(dx<CW+4&&dy<CH+4) cost+=3;
+        continue;
+      }
       if(dx<CW+4&&dy<CH+4) cost+=o.state==='active'?5:3;
       else if(dx<CW+20&&dy<CH+20) cost+=.6;
     }
@@ -534,7 +532,7 @@ function botThink(c){
   };
   if(c.state==='active'){
     const ys=[c.y-150,c.y-75,c.y,c.y+75,c.y+150,b.prefY].map(v=>clamp(v,YMIN,YMAX));
-    if(hunt) ys.push(clamp(L.y,YMIN,YMAX));
+    if(hunt) ys.push(clamp(L.y-CH-10,YMIN,YMAX));
     const step=Math.max(12,LW*lanesAt(dOf(c.y))/40);
     for(const py of ys){
       const hl=Math.min(halfAtY(py-HH),halfAtY(py+HH)), lo=CX-hl+HW, hi=CX+hl-HW;
@@ -544,6 +542,10 @@ function botThink(c){
           if(Math.abs(py-j.y)<45 && px>roadRAt(py)-HW-14) extra-=b.aggr*2.5;
         tryCand(px,py,extra);
       }
+    }
+    if(hunt){                                                            // the lane grid can miss the leader's exact x
+      const py=clamp(L.y-CH-10,YMIN,YMAX), hl=Math.min(halfAtY(py-HH),halfAtY(py+HH));
+      tryCand(clamp(L.x,CX-hl+HW,CX+hl-HW),py,0);
     }
     tryCand(c.x,c.y,-.4);                                                // mild preference to stay put
   } else {
@@ -744,12 +746,12 @@ function titlePanel(){
   showPanel(`<h1>Carlane Carnage</h1>
     <p class="small"><b>${esc(roomText())}</b></p>
     <p>The road never ends. Survive the longest to become the <b>★ leader</b>. Everyone else wants you gone.</p>
-    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. Drive sideways into a car to shove it: if it crashes within ${CFG.shoveCredit} seconds, the knockout is yours. You join from the on-ramp on the right: merge left before it ends. M mutes.</p>`,
+    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. Cars can't push each other, but you can block: sit in someone's way, and if they crash within ${CFG.blockCredit} seconds of running into you, the knockout is yours. You join from the on-ramp on the right: merge left before it ends. M mutes.</p>`,
     'Join the road', joinGame);
 }
 function deathPanel(){
   showPanel(`<h2>${esc(deathReason)}</h2>
-    ${deathBy?`<p>Shoved by <b>${esc(deathBy)}</b></p>`:''}
+    ${deathBy?`<p>Blocked by <b>${esc(deathBy)}</b></p>`:''}
     <p>You survived <span class="big">${fmt(lastRun)}</span></p>
     <p class="small">Your best is ${fmt(best)}. The road kept going without you.</p>`,
     'Rejoin', joinGame);
@@ -1004,11 +1006,6 @@ function drawStar(x,y,r){
 }
 function drawCar(c,leader){
   const {x,y}=c, w=CW, h=CH;
-  if(leader){                                               // the leader glows so everyone can find them
-    const g=ctx.createRadialGradient(x,y,6,x,y,52);
-    g.addColorStop(0,'rgba(244,194,13,.45)'); g.addColorStop(1,'rgba(244,194,13,0)');
-    ctx.fillStyle=g; ctx.fillRect(x-52,y-52,104,104);
-  }
   ctx.fillStyle='rgba(0,0,0,.28)'; rr(x-w/2+2,y-h/2+3,w,h,7); ctx.fill();
   ctx.fillStyle=c.color; rr(x-w/2,y-h/2,w,h,7); ctx.fill();
   ctx.fillStyle='#1f2a36'; rr(x-w/2+4,y-h/2+10,w-8,11,3); ctx.fill(); rr(x-w/2+4,y+h/2-14,w-8,7,3); ctx.fill();
@@ -1023,18 +1020,18 @@ function drawCar(c,leader){
     ctx.fillStyle='#ffb300'; ctx.fillRect(x-w/2-1,y-h/2+2,5,6); ctx.fillRect(x-w/2-1,y+h/2-8,5,6);
   }
   if(c===me){ ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; rr(x-w/2-3,y-h/2-3,w+6,h+6,9); ctx.stroke(); }
-  if(leader){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2.5; rr(x-w/2-5,y-h/2-5,w+10,h+10,10); ctx.stroke(); }
-  if(c.state==='joining'){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2; ctx.setLineDash([5,4]); rr(x-w/2-6,y-h/2-6,w+12,h+12,10); ctx.stroke(); ctx.setLineDash([]); }
-  ctx.font='800 11px Overpass, Arial, sans-serif'; ctx.textAlign='center';
-  const label=c.name, ly=y-h/2-(c===me||leader?10:6);
-  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(label,x+1,ly+1);
-  ctx.fillStyle='#fff'; ctx.fillText(label,x,ly);
-  if(leader){
-    const bob=Math.sin(t*4)*2, sy=ly-19+bob;
-    ctx.fillStyle='rgba(0,0,0,.35)'; drawStar(x+1.5,sy+1.5,11); ctx.fill();
-    ctx.fillStyle='#f4c20d'; drawStar(x,sy,11); ctx.fill();
-    ctx.strokeStyle='#7a5a00'; ctx.lineWidth=1.5; ctx.stroke();
+  if(leader){                                                 // leader: a small star painted on the roof
+    ctx.fillStyle='#f4c20d'; drawStar(x,y+4,6.5); ctx.fill();
+    ctx.strokeStyle='rgba(60,40,0,.85)'; ctx.lineWidth=1.2; ctx.stroke();
   }
+  if(c.state==='joining'){ ctx.strokeStyle='#f4c20d'; ctx.lineWidth=2; ctx.setLineDash([5,4]); rr(x-w/2-6,y-h/2-6,w+12,h+12,10); ctx.stroke(); ctx.setLineDash([]); }
+}
+// Names go on after every car is drawn, so a car just ahead never hides someone's name
+function drawLabel(c){
+  ctx.font='800 11px Overpass, Arial, sans-serif'; ctx.textAlign='center';
+  const ly=c.y-CH/2-(c===me?10:6);
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(c.name,c.x+1,ly+1);
+  ctx.fillStyle='#fff'; ctx.fillText(c.name,c.x,ly);
 }
 function render(){
   ctx.setTransform(1,0,0,1,0,0);
@@ -1046,6 +1043,7 @@ function render(){
   for(const o of obstacles) if(o.type==='car'||o.type==='truck') drawObstacle(o);
   for(const c of cars) if(c.state!=='dead'&&c!==me) drawCar(c,c.idx===leadIdx);
   if(me&&me.state!=='dead') drawCar(me,me.idx===leadIdx);
+  for(const c of cars) if(c.state!=='dead') drawLabel(c);
   for(const p of parts){ ctx.globalAlpha=clamp(p.life*1.6,0,1); ctx.fillStyle=p.col; ctx.fillRect(p.x-3,p.y-3,6,6); }
   ctx.globalAlpha=1;
   if(touch.active && $('panel').hidden){
@@ -1279,7 +1277,7 @@ function showKO(m){
   const mine=me&&m.by===me.idx, vict=me&&m.v===me.idx;
   const V=vict?'You':esc(m.vn), B=mine?'You':esc(m.bn);
   if(m.lead&&m.bn){ toast(`★ ${B} took down the leader ${vict?'(you)':V}!`,true); if(mine) SFX.crown(); }
-  else if(m.bn) toast(`${B} shoved ${V} out · ${esc(m.r)}`,mine);
+  else if(m.bn) toast(`${B} blocked ${V} out · ${esc(m.r)}`,mine);
   else if(m.lead) toast(`★ Leader ${V} is out · ${esc(m.r)}`);
   else if(!vict) toast(`${V} · ${esc(m.r)}`);
 }
@@ -1425,12 +1423,12 @@ function step(){
   return dt;
 }
 function frame(){
+  requestAnimationFrame(frame);                            // schedule first, so one bad frame can't stop the loop
   const dt=step();
   hudTimer-=dt; if(hudTimer<=0){ updateHud(); hudTimer=.1; }
   boardTimer-=dt; if(boardTimer<=0){ renderBoard(); boardTimer=.25; }
   SFX.drive(mode==='playing'&&!!me&&me.state!=='dead', inp.x, inp.y);
   updateCamera(dt); render();
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 addEventListener('pagehide',()=>{ if(isHost) broadcast({t:'bye'}); else send({t:'bye'}); });   // tell the others right away
