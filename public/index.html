@@ -60,7 +60,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #panel .big{font-size:1.3em;font-weight:800;font-variant-numeric:tabular-nums}
 button{font:inherit;font-weight:800;font-size:1.05em;background:var(--ink);color:var(--sign);border:0;border-radius:.4em;padding:.6em 1.1em;margin-top:.3em;cursor:pointer}
 button:focus-visible{outline:.2em solid var(--warn);outline-offset:.15em}
-#snd{position:absolute;left:.5em;bottom:.5em;font-size:.72em;padding:.4em .7em;margin:0;background:var(--sign);color:var(--ink);border:.13em solid var(--ink);box-shadow:0 .15em 0 rgba(0,0,0,.28)}
+#ctl{position:absolute;left:.5em;bottom:.5em;display:flex;gap:.4em}
+#ctl button{font-size:.72em;padding:.4em .7em;margin:0;background:var(--sign);color:var(--ink);border:.13em solid var(--ink);box-shadow:0 .15em 0 rgba(0,0,0,.28)}
 [hidden]{display:none!important}
 input{font:inherit;font-weight:700;font-size:1.05em;width:100%;padding:.55em .7em;border:.13em solid var(--ink);border-radius:.4em;background:rgba(0,0,0,.2);color:var(--ink);margin:.2em 0 .5em;-webkit-user-select:text;user-select:text}
 input::placeholder{color:rgba(255,255,255,.6)}
@@ -90,7 +91,7 @@ input::placeholder{color:rgba(255,255,255,.6)}
   #side .legend{display:none}
   #boardToggle{display:block;position:absolute;z-index:3;left:.4rem;bottom:.5rem;margin:0;font-size:12px;padding:.35em .7em;background:var(--sign);color:var(--ink);border:.13em solid var(--ink)}
   body.board-closed #side{display:none}
-  #snd{left:auto;right:.5em}
+  #ctl{left:auto;right:.5em}
 }
 </style>
 </head>
@@ -98,7 +99,7 @@ input::placeholder{color:rgba(255,255,255,.6)}
 <aside id="side" aria-label="Leaderboard">
   <div class="sign"><div class="in"><h3><span>Leaderboard</span><small id="roomLbl">—</small></h3></div></div>
   <ol id="board"></ol>
-  <p class="legend">Big number: current run. Small: best run and knockouts (KO). ★ is the leader: block them into trouble to take the crown.</p>
+  <p class="legend">Big number: current run. Small: best run and knockouts (KO). ★ is the leader: <span id="modeTxt">block them into trouble</span> to take the crown.</p>
 </aside>
 <button id="boardToggle" type="button" aria-controls="side">Board</button>
 <div id="wrap">
@@ -109,7 +110,7 @@ input::placeholder{color:rgba(255,255,255,.6)}
   </div></div>
   <div id="feed" aria-live="polite"></div>
   <div id="merge" hidden><div class="in"><span id="mergeText">Merge left</span><b id="mergeNum">10</b></div></div>
-  <button id="snd" type="button" aria-pressed="true">Sound on</button>
+  <div id="ctl"><button id="exit" type="button" hidden>Exit</button><button id="pushBtn" type="button" aria-pressed="false" hidden title="Host control: everyone in the room">Pushing off</button><button id="snd" type="button" aria-pressed="true">Sound on</button></div>
   <div id="panel" class="sign"><div class="in" id="panelIn"></div></div>
 </div>
 <script src="peerjs.min.js"></script>
@@ -128,7 +129,9 @@ const CFG = {
   joinGrace: 2,        // seconds while it closes
   botSkill: [0.55, 0.95],
   bots: humans => humans>=4 ? 0 : 5-humans,   // solo: 4 bots, duo: 3, trio: 2, 4+ players: none
-  blockCredit: 2,      // seconds after another car blocks you that a crash still counts as their knockout (0 = off)
+  blockCredit: 2,      // seconds after another car blocks/pushes you that a crash still counts as their knockout (0 = off)
+  pushing: false,      // new rooms start with pushing off; the host can toggle it in-game
+  pushGive: .45,       // pushing on: share of your speed lost while shoving a car (1 = can't push at all)
   separate: 80,        // px/s: how gently two overlapping cars (network lag, narrowing road) drift apart
   sendHz: 20,          // host → everyone: car positions per second
   meHz: 30,            // you → host: your own car per second
@@ -169,7 +172,7 @@ let sections=[], secVer=0, obstacles=[], obSeq=0, nextSpawn=H+260;
 let cars=[], parts=[], me=null, leadIdx=-1, hostIdx=-1;
 let mode='name', lastRun=0, deathReason='', deathBy='', panelTimer=0, hudTimer=0;
 let isHost=false, roomNo=1, myIdx=-1, myName='', rosVer=0, rosterDirty=false;
-let carSeq=0, joinSeq=0;
+let carSeq=0, joinSeq=0, pushOn=CFG.pushing;
 const inp={x:0,y:0};
 let best=0; try{ best=+localStorage.getItem('cc_best')||0; }catch(e){}
 const usedNames=new Set();
@@ -416,11 +419,14 @@ function xBounds(c,y){
 }
 const yBounds=c=>c.state==='joining'?[ETOP+HH,YMAX]:[YMIN,YMAX];
 
-// Car-on-car contact is BLOCKING only: you can't drive through another car, but nobody gets shoved.
-// Each machine resolves only the cars it drives (the host does bots, each player does their own car):
-// a car that moves into another is stopped at its bumper, and the car it touched never moves.
-// Leftover overlap (network lag, or two cars squeezed by a narrowing road) eases apart slowly, so it
+// Car-on-car contact. Each machine resolves only the cars it drives (the host does bots, each player
+// does their own car), so every rule is written from the point of view of the car being moved.
+// Blocking (pushing off): a car that moves into another is stopped at its bumper, and the car it
+// touched never moves. Leftover overlap (network lag, a narrowing road) eases apart slowly, so it
 // can never be used as a push.
+// Pushing (host toggle): the pusher is only slowed (CFG.pushGive), and the car being pushed moves
+// itself out of the way on its own screen, so a shove works even though nobody moves anyone else's car.
+// In both modes, the car that ran into you (or you into it) gets the KO if you crash soon after.
 function bump(c,ox,oy,nx,ny,dt){
   for(const o of cars){
     if(o===c||o.state==='dead') continue;
@@ -430,13 +436,17 @@ function bump(c,ox,oy,nx,ny,dt){
     const lat=px<py&&!ramp, pen=lat?px:py, d=lat?dx:dy;
     const dir=d!==0?Math.sign(d):(c.idx>o.idx?1:-1);
     const into=Math.max(0,-(lat?nx-ox:ny-oy)*dir);              // how far I drove into them this step
-    const fix=Math.min(pen,into+CFG.separate*dt);
+    const mine=Math.max(0,-(lat?c.vx:c.vy)*dir);                // my speed toward them
+    const theirs=Math.max(0,(lat?o.evx:o.evy)*dir);             // their speed toward me
+    let fix;
+    if(!pushOn) fix=Math.min(pen,into+CFG.separate*dt);
+    else if(theirs>30&&theirs>=mine) fix=pen;                   // shoved: get out of the way, right up to their bumper
+    else fix=Math.min(pen,Math.max(into*CFG.pushGive+CFG.separate*dt,pen-8));   // shoving: slowed, never more than 8px in
     if(lat) nx+=dir*fix; else ny+=dir*fix;
-    // Driving into a car that won't move = you were blocked. If you crash soon after, the KO is theirs.
-    const push=Math.max(0,-(lat?c.vx:c.vy)*dir);
-    if(push>90){
-      const fresh=c.hitBy!==o.idx||t-c.hitAt>.5;
-      c.hitBy=o.idx; c.hitAt=t;
+    const k=pushOn&&theirs>90&&theirs>=mine?o:(mine>90?o:null);
+    if(k){
+      const fresh=c.hitBy!==k.idx||t-c.hitAt>.5;
+      c.hitBy=k.idx; c.hitAt=t;
       if(fresh){ if(c===me) SFX.bump(.7); else if(o===me) SFX.bump(.45); }
     }
   }
@@ -746,7 +756,9 @@ function titlePanel(){
   showPanel(`<h1>Carlane Carnage</h1>
     <p class="small"><b>${esc(roomText())}</b></p>
     <p>The road never ends. Survive the longest to become the <b>★ leader</b>. Everyone else wants you gone.</p>
-    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. Cars can't push each other, but you can block: sit in someone's way, and if they crash within ${CFG.blockCredit} seconds of running into you, the knockout is yours. You join from the on-ramp on the right: merge left before it ends. M mutes.</p>`,
+    <p class="small">Arrow keys or WASD. On a phone, press anywhere and drag to steer. ${pushOn
+      ?`Pushing is on: ram other cars to shove them, and if they crash within ${CFG.blockCredit} seconds, the knockout is yours.`
+      :`Cars can't push each other, but you can block: sit in someone's way, and if they crash within ${CFG.blockCredit} seconds of running into you, the knockout is yours.`}${isHost?' You are the host: the Pushing button at the bottom switches pushing on or off for everyone.':''} You join from the on-ramp on the right: merge left before it ends. M mutes.</p>`,
     'Join the road', joinGame);
 }
 function deathPanel(){
@@ -761,7 +773,7 @@ function joinGame(){
   if(me) me.pending=true;
 }
 function namePanel(status){
-  mode='name';
+  mode='name'; $('exit').hidden=true;
   $('panelIn').innerHTML=`<h1>Carlane Carnage</h1>${BYLINE}
     <form id="nameForm"><input id="nameIn" maxlength="14" placeholder="Your name" autocomplete="off" required>
     <button type="submit">Find a room</button></form><p class="small" id="status">${status||''}</p>`;
@@ -773,7 +785,7 @@ function namePanel(status){
     myName=i.value.trim().slice(0,14); if(!myName) return;
     try{ localStorage.setItem('cc_name',myName); }catch(e){}
     i.disabled=true; e.target.querySelector('button').disabled=true;
-    mode='connecting'; connect();
+    mode='connecting'; $('exit').hidden=false; connect();
   });
 }
 const setStatus=m=>{ const s=$('status'); if(s) s.textContent=m; };
@@ -1078,6 +1090,9 @@ function renderBoard(){
     return {c,on,run,best:Math.max(c.best||0,run)};
   }).sort((a,b)=>(b.on-a.on)||(b.run-a.run)||(b.best-a.best));
   $('roomLbl').textContent=myIdx>=0?roomText():'—';
+  $('modeTxt').textContent=pushOn?'shove them into trouble':'block them into trouble';
+  const pb=$('pushBtn'); pb.hidden=!(isHost&&myIdx>=0);
+  pb.textContent=pushOn?'Pushing on':'Pushing off'; pb.setAttribute('aria-pressed',String(pushOn));
   const rk=rows.findIndex(r=>r.c===me);
   $('rank').textContent=me&&rk>=0?`#${rk+1} of ${rows.length}`:'';
   $('board').innerHTML=rows.map((r,i)=>{
@@ -1133,7 +1148,7 @@ function broadcast(m,skipBusy){
 const secMsg=()=>({t:'sec',v:secVer,l:sections.map(s=>[r1(s.start),r1(s.end),s.lanes]),ns:r1(nextSpawn),os:obSeq});
 function rosMsg(){
   rosVer++;
-  return {t:'ros',v:rosVer,room:roomNo,h:hostIdx,
+  return {t:'ros',v:rosVer,room:roomNo,h:hostIdx,p:pushOn?1:0,
     l:cars.map(c=>[c.idx,c.id,c.name,c.color,c.human?1:0,r1(c.best),c.kos,c.crowns,c.join])};
 }
 
@@ -1180,7 +1195,7 @@ function becomeHost(p){
   isHost=true; hostConn=null; stopPings();
   if(fresh){
     clockOff=-performance.now()/1000; t=lastT=now(); travel=0;
-    sections=[]; obstacles=[]; cars=[]; obSeq=0; nextSpawn=H+260;
+    sections=[]; obstacles=[]; cars=[]; obSeq=0; nextSpawn=H+260; pushOn=CFG.pushing;
     me=addHuman(p.id,myName); me.local=true; myIdx=me.idx;
     balanceBots();
     cars.filter(c=>c.brain).slice(0,3).forEach((c,i)=>Object.assign(c,{state:'active',x:CX+(i-1)*LW*1.1,y:rand(470,650),alive:rand(8,60)}));  // the road is already busy
@@ -1196,7 +1211,7 @@ function becomeHost(p){
     for(const o of obstacles) obSeq=Math.max(obSeq,o.id);
     me.id=p.id;
     carSeq=Math.max(carSeq,...cars.map(c=>c.idx)); joinSeq=Math.max(joinSeq,...cars.map(c=>c.join));
-    toast('The host left. You are hosting this room now.');
+    toast('The host left. You are hosting this room now, so the pushing switch is yours.');
     balanceBots();
   }
   hostIdx=me.idx;
@@ -1333,6 +1348,7 @@ function onWelcome(m){
   rosVer=-1;
   if(me&&m.you!==myIdx) me.idx=m.you;                     // new host gave us a new number
   myIdx=m.you;
+  pushOn=!!m.ros.p;                                        // arrive with the room's setting, no announcement
   onRoster(m.ros);
   if(first){ setStatus(''); titlePanel(); }
   else toast(`Reconnected to room ${roomNo}.`);
@@ -1345,6 +1361,7 @@ function onSections(m){
 function onRoster(m){
   if(m.v<=rosVer) return; rosVer=m.v;
   roomNo=m.room; hostIdx=m.h;
+  if(!!m.p!==pushOn){ pushOn=!!m.p; toast(pushOn?'The host turned pushing ON. Shove them off the road!':'The host turned pushing OFF. Back to blocking.',true); }
   const keep=new Set();
   for(const [idx,id,name,color,human,bst,kos,crowns,join] of m.l){
     let c=byIdx(idx);
@@ -1394,6 +1411,19 @@ function lostHost(){
   const my=++attempt;
   setTimeout(()=>{ if(my===attempt&&!isHost&&!hostConn) connect(); }, rank===0?150:1200+rank*400);   // the longest-standing player claims it first
 }
+// Leave the room and go back to the name screen. If we were hosting, the others take over
+// the room exactly as if we'd closed the tab.
+function leaveGame(){
+  if(isHost){ broadcast({t:'bye'}); for(const h of peers.values()) try{ h.conn.close(); }catch(e){} }
+  else { send({t:'bye'}); try{ hostConn&&hostConn.close(); }catch(e){} }
+  attempt++;                                               // cancels any pending connect/retry
+  const p=peer; peer=null; hostConn=null; isHost=false; stopPings(); peers.clear(); syncSamples=[];
+  setTimeout(()=>{ try{ p&&p.destroy(); }catch(e){} },300);   // let the goodbye go out first
+  cars=[]; parts=[]; obstacles=[]; sections=[]; me=null; myIdx=-1; leadIdx=hostIdx=-1; roomNo=1;
+  myPrev=null; prevLead=-1; usedNames.clear(); pushOn=CFG.pushing;
+  $('merge').hidden=true; $('feed').innerHTML='';
+  namePanel();
+}
 function clientTick(nowMs){
   if(!hostConn) return;
   const rate=me&&me.state!=='dead'?CFG.meHz:4;
@@ -1409,6 +1439,12 @@ const paintSnd=()=>{ sndBtn.textContent=SFX.muted?'Sound off':'Sound on'; sndBtn
 sndBtn.addEventListener('click',()=>{ SFX.setMuted(!SFX.muted); paintSnd(); sndBtn.blur(); });
 addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT') return; if(e.key==='m'||e.key==='M'){ SFX.setMuted(!SFX.muted); paintSnd(); } });
 paintSnd();
+$('exit').addEventListener('click',e=>{ e.currentTarget.blur(); leaveGame(); });
+$('pushBtn').addEventListener('click',e=>{
+  e.currentTarget.blur(); if(!isHost) return;
+  pushOn=!pushOn; rosterDirty=true; boardTimer=0;
+  toast(pushOn?'You turned pushing ON for the room.':'You turned pushing OFF for the room.',true);
+});
 
 let lastFrame=performance.now();
 function step(){

@@ -15,6 +15,10 @@ Multiplayer top-down merge-and-survive game. Static site, no backend to run.
   into you just stops at your bumper. So you win by getting in the way. If someone runs into you and then crashes within 2 s
   (pothole, traffic, barrier, or the on-ramp running out), the knockout (KO) is yours.
   Taking out the leader also earns a crown (★) on the leaderboard. Aggressive bots try to box the leader in too.
+- **Pushing (host toggle)**: the room's host gets a "Pushing off / on" button at the bottom of the screen. With pushing on,
+  ramming a car shoves it (you slow down a little while shoving), and if they crash within 2 s the KO is yours.
+  The setting applies to everyone in the room, new rooms start with it off, and it carries over if the host changes.
+- **Exit** (bottom of the screen) leaves the room and takes you back to the name screen.
 - **Leaderboard** on the side: everyone's current run, best run, KOs and crowns. On phones it's behind the "Board" button.
 
 ## Rooms
