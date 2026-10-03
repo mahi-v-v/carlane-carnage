@@ -110,7 +110,7 @@ input::placeholder{color:rgba(255,255,255,.6)}
   </div></div>
   <div id="feed" aria-live="polite"></div>
   <div id="merge" hidden><div class="in"><span id="mergeText">Merge left</span><b id="mergeNum">10</b></div></div>
-  <div id="ctl"><button id="exit" type="button" hidden>Exit</button><button id="pushBtn" type="button" aria-pressed="false" hidden title="Host control: everyone in the room">Pushing off</button><button id="snd" type="button" aria-pressed="true">Sound on</button></div>
+  <div id="ctl"><button id="exit" type="button" hidden>Exit</button><button id="pushBtn" type="button" aria-pressed="false" hidden title="Host control: everyone in the room">Pushing off</button><button id="mus" type="button" aria-pressed="true">Music on</button><button id="snd" type="button" aria-pressed="true">Sound on</button></div>
   <div id="panel" class="sign"><div class="in" id="panelIn"></div></div>
 </div>
 <script src="peerjs.min.js"></script>
@@ -581,126 +581,133 @@ function updateBot(c,dt){
   const s=Math.min(sp,d*7); c.vx=dx/d*s; c.vy=dy/d*s;
 }
 
-/* ============ Sound — synthesised live with Web Audio, no audio files ============ */
+/* ============ Sound — retro 8-bit, synthesised live with Web Audio, no audio files ============ */
+// Two buses: effects and a looping chiptune (pulse-wave arp + lead, triangle bass, noise drums).
+// The music plays muffled on menus and the death screen, and opens up while you drive.
 const SFX=(()=>{
-  let ac=null, master=null, noiseBuf=null, eng=null, muted=false;
+  let ac=null, master=null, fx=null, mus=null, musLP=null, noiseBuf=null, waves={}, muted=false, musicOn=true;
   const last=new Map();
-  let lastDir=0, lastWhoosh=0, lastBump=0;
-  try{ muted=localStorage.getItem('cc_mute')==='1'; }catch(e){}
+  let lastBump=0, lastCrash=0, nextT=0, step=0, loop=0;
+  try{ muted=localStorage.getItem('cc_mute')==='1'; musicOn=localStorage.getItem('cc_music')!=='0'; }catch(e){}
+  const mtof=m=>440*Math.pow(2,(m-69)/12);
 
+  // NES-style pulse wave with a given duty cycle (12.5% thin and nasal, 25% classic lead)
+  function pulse(duty){
+    const n=40, re=new Float32Array(n), im=new Float32Array(n);
+    for(let k=1;k<n;k++){ re[k]=Math.sin(2*Math.PI*k*duty)/(k*Math.PI); im[k]=(1-Math.cos(2*Math.PI*k*duty))/(k*Math.PI); }
+    return ac.createPeriodicWave(re,im);
+  }
   function init(){
     if(ac){ if(ac.state==='suspended'&&!muted&&!document.hidden) ac.resume(); return; }
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
     ac=new AC();
     const comp=ac.createDynamicsCompressor(); comp.connect(ac.destination);
-    master=ac.createGain(); master.gain.value=muted?0:.9; master.connect(comp);
-    noiseBuf=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate);
-    const ch=noiseBuf.getChannelData(0); for(let i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
-    const loopNoise=()=>{ const s=ac.createBufferSource(); s.buffer=noiseBuf; s.loop=true; s.start(); return s; };
-
-    // Engine: saw + sub-octave square through a resonant low-pass, with a little idle lope
-    const o1=ac.createOscillator(); o1.type='sawtooth'; o1.frequency.value=50;
-    const o2=ac.createOscillator(); o2.type='square'; o2.frequency.value=25;
-    const g2=ac.createGain(); g2.gain.value=.5;
-    const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=480; lp.Q.value=4;
-    const eg=ac.createGain(); eg.gain.value=0;
-    const lfo=ac.createOscillator(); lfo.frequency.value=9;
-    const lfoG=ac.createGain(); lfoG.gain.value=0;
-    lfo.connect(lfoG); lfoG.connect(eg.gain);
-    o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(eg); eg.connect(master);
-    o1.start(); o2.start(); lfo.start();
-
-    // Steering: soft low tyre-on-asphalt rumble (plus a one-shot whoosh when you start or reverse a lane change)
-    const sn=loopNoise(), sbp=ac.createBiquadFilter(); sbp.type='lowpass'; sbp.frequency.value=380; sbp.Q.value=.7;
-    const sg=ac.createGain(); sg.gain.value=0; sn.connect(sbp); sbp.connect(sg); sg.connect(master);
-
-    // Brakes: narrow noise hiss plus a wobbling squeal
-    const bn=loopNoise(), bbp=ac.createBiquadFilter(); bbp.type='bandpass'; bbp.frequency.value=3300; bbp.Q.value=9;
-    const bg=ac.createGain(); bg.gain.value=0; bn.connect(bbp); bbp.connect(bg);
-    const sq=ac.createOscillator(); sq.type='triangle'; sq.frequency.value=2650;
-    const vib=ac.createOscillator(); vib.frequency.value=13; const vibG=ac.createGain(); vibG.gain.value=35;
-    vib.connect(vibG); vibG.connect(sq.frequency);
-    const sqG=ac.createGain(); sqG.gain.value=.3; sq.connect(sqG); sqG.connect(bg);
-    sq.start(); vib.start(); bg.connect(master);
-
-    eng={o1,o2,lp,eg,lfoG,sg,sbp,bg};
+    master=ac.createGain(); master.gain.value=muted?0:.8; master.connect(comp);
+    fx=ac.createGain(); fx.connect(master);
+    musLP=ac.createBiquadFilter(); musLP.type='lowpass'; musLP.frequency.value=1100; musLP.connect(master);
+    mus=ac.createGain(); mus.gain.value=0; mus.connect(musLP);
+    waves={p12:pulse(.125),p25:pulse(.25)};
+    noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);
+    const ch=noiseBuf.getChannelData(0); for(let i=0;i<ch.length;i++) ch[i]=Math.random()<.5?-1:1;   // 1-bit noise, like the NES
+    nextT=ac.currentTime+.1;
+    setInterval(schedule,25);
   }
   const set=(p,v,tau)=>{ if(last.get(p)!==v){ p.setTargetAtTime(v,ac.currentTime,tau); last.set(p,v); } };
 
-  // Called every frame with the player's steering input
-  function drive(alive,ix,iy){
-    if(!eng) return;
-    const up=iy<-.2, down=iy>.2, lat=Math.abs(ix)>.2;
-    const f=!alive?40: up?98: down?38: 50;
-    set(eng.o1.frequency,f,up?.35:.2); set(eng.o2.frequency,f/2,up?.35:.2);
-    set(eng.lp.frequency,!alive?300: up?1500: down?360: 480,.2);
-    set(eng.eg.gain,!alive?0: up?.2: .13,.12);
-    set(eng.lfoG.gain,!alive?0: up?.015: .035,.2);
-    set(eng.sg.gain,alive&&lat?.07:0,.08);
-    set(eng.sbp.frequency,up?520:380,.2);
-    const dir=lat?Math.sign(ix):0;
-    if(alive&&dir!==0&&dir!==lastDir&&ac.currentTime-lastWhoosh>.25){ whoosh(); lastWhoosh=ac.currentTime; }
-    lastDir=dir;
-    set(eng.bg.gain,alive&&down?.05:0,.07);
+  // One square-edged note. slide: glide to this pitch; decay: end the note at this fraction of its volume.
+  function tone(dest,type,freq,t0,dur,vol,slide,decay){
+    const o=ac.createOscillator(), g=ac.createGain();
+    if(waves[type]) o.setPeriodicWave(waves[type]); else o.type=type;
+    o.frequency.setValueAtTime(freq,t0);
+    if(slide) o.frequency.exponentialRampToValueAtTime(slide,t0+dur);
+    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(vol,t0+.003);
+    if(decay) g.gain.linearRampToValueAtTime(vol*decay,t0+dur*.85); else g.gain.setValueAtTime(vol,t0+dur*.85);
+    g.gain.linearRampToValueAtTime(0,t0+dur);
+    o.connect(g); g.connect(dest); o.start(t0); o.stop(t0+dur+.02);
+  }
+  // Noise hit. rate: pitch of the noise (low = rumbly boom); rateTo: sweep it; hp: high-pass for hats.
+  function hiss(dest,t0,dur,vol,rate,rateTo,hp){
+    const s=ac.createBufferSource(), g=ac.createGain(); s.buffer=noiseBuf;
+    s.playbackRate.setValueAtTime(rate,t0);
+    if(rateTo) s.playbackRate.exponentialRampToValueAtTime(rateTo,t0+dur);
+    g.gain.setValueAtTime(vol,t0); g.gain.linearRampToValueAtTime(0,t0+dur);
+    let out=s; if(hp){ const f=ac.createBiquadFilter(); f.type='highpass'; f.frequency.value=hp; s.connect(f); out=f; }
+    out.connect(g); g.connect(dest); s.start(t0,Math.random()*.5); s.stop(t0+dur+.02);
+  }
+  const ok=()=>ac&&!muted;
+
+  /* ---- music: 8 bars at 150 BPM, Am F C G Am F G E ---- */
+  const S16=60/150/4;
+  const CH=[[57,60,64],[53,57,60],[55,60,64],[55,59,62],[57,60,64],[53,57,60],[55,59,62],[56,59,64]];
+  const BASS=[45,41,48,43,45,41,43,40];
+  const LEAD=[[0,2,3],[3,1,3],[6,0,2],[10,1,2],[12,2,4]];   // [step, chord tone, length]: always in key
+  function schedule(){
+    if(!ac||ac.state!=='running') return;
+    if(muted||!musicOn){ nextT=ac.currentTime+.05; return; }
+    if(nextT<ac.currentTime) nextT=ac.currentTime+.02;     // fell behind (tab was busy): skip ahead, don't burst
+    while(nextT<ac.currentTime+.12){
+      playStep(step,nextT);
+      nextT+=S16; step=(step+1)%128; if(step===0) loop++;
+    }
+  }
+  function playStep(s,t0){
+    const bar=s>>4, i=s&15, ch=CH[bar], b=BASS[bar];
+    if(i%2===0) tone(mus,'triangle',mtof(i%4===0?b:b+12),t0,S16*1.8,.3);              // octave-pumping bass
+    tone(mus,'p12',mtof(ch[[0,1,2,1][i%4]]+12),t0,S16*.9,.04,0,.3);                   // arpeggio
+    if(loop%2===1) for(const [at,deg,len] of LEAD) if(at===i) tone(mus,'p25',mtof(ch[deg]+12),t0,S16*len*.95,.055,0,.5);   // lead every other loop
+    if(i===0||i===8||(i===10&&bar%2===1)) tone(mus,'triangle',160,t0,.11,.5,40);       // kick
+    if(i===4||i===12||(bar===7&&i>=13)) hiss(mus,t0,.11,.14,.6);                       // snare (+ fill into the loop)
+    if(i%4===2) hiss(mus,t0,.03,.05,1,0,7000);                                         // hat
   }
 
-  function env(g,t0,peak,dur,atk=.005){
-    g.gain.setValueAtTime(.0001,t0);
-    g.gain.exponentialRampToValueAtTime(Math.max(.0002,peak),t0+atk);
-    g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
-  }
-  function blip(freq,dur,vol,type='square',at=0){
-    if(!ac||muted) return;
-    const t0=ac.currentTime+at, o=ac.createOscillator(), g=ac.createGain();
-    o.type=type; o.frequency.value=freq; env(g,t0,vol,dur);
-    o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+.03);
-    return {o,t0};
-  }
-  function burst(dur,vol,type,freq,at=0,atk=.005){
-    if(!ac||muted) return;
-    const t0=ac.currentTime+at, s=ac.createBufferSource(), f=ac.createBiquadFilter(), g=ac.createGain();
-    s.buffer=noiseBuf; f.type=type; f.frequency.value=freq; env(g,t0,vol,dur,atk);
-    s.connect(f); f.connect(g); g.connect(master); s.start(t0,Math.random()); s.stop(t0+dur+.03);
-    return {f,t0};
+  // Called every frame: music opens up while you're driving, muffles on menus and after a crash
+  function drive(alive){
+    if(!ac) return;
+    set(musLP.frequency,alive?16000:1100,.25);
+    set(mus.gain,musicOn&&!muted?(alive?.5:.38):0,.2);
   }
 
-  function whoosh(){
-    const w=burst(.34,.13,'bandpass',300,0,.09);
-    if(w){ w.f.Q.value=1.6; w.f.frequency.setValueAtTime(300,w.t0); w.f.frequency.exponentialRampToValueAtTime(1000,w.t0+.13); w.f.frequency.exponentialRampToValueAtTime(320,w.t0+.33); }
-  }
-  const tick=()=>{ burst(.012,.35,'highpass',2500); blip(1500,.02,.12); };
-  const tock=()=>{ burst(.012,.3,'highpass',2000); blip(1150,.02,.1); };
-  // Stalk snapping back when you complete the merge
-  const cancel=()=>{ burst(.02,.5,'bandpass',1400); blip(820,.035,.15); burst(.014,.32,'highpass',2300,.05); };
-  // Door-panel thud when cars trade paint
+  /* ---- effects ---- */
+  const tick=()=>{ if(ok()) tone(fx,'p12',1320,ac.currentTime,.035,.05); };   // on-ramp blinker
+  const tock=()=>{ if(ok()) tone(fx,'p12',990,ac.currentTime,.035,.045); };
+  // Merged onto the road: "ba-ding"
+  const cancel=()=>{ if(!ok()) return; const t=ac.currentTime; tone(fx,'p25',mtof(72),t,.06,.11); tone(fx,'p25',mtof(79),t+.06,.12,.11,0,.4); };
+  // Cars trading paint
   function bump(vol){
-    if(!ac||muted||ac.currentTime-lastBump<.12) return; lastBump=ac.currentTime;
-    burst(.12,.45*vol,'lowpass',900); const b=blip(110,.12,.35*vol,'sine');
-    if(b) b.o.frequency.exponentialRampToValueAtTime(60,b.t0+.1);
+    if(!ok()||ac.currentTime-lastBump<.12) return; const t=lastBump=ac.currentTime;
+    tone(fx,'square',220,t,.09,.15*vol,70); hiss(fx,t,.06,.22*vol,.35);
   }
-  // Little fanfare when you take the crown
-  const crown=()=>{ [660,880,1320].forEach((f,i)=>blip(f,.12,.12,'triangle',i*.09)); };
-
+  // You knocked someone out: coin
+  const ko=()=>{ if(!ok()) return; const t=ac.currentTime; tone(fx,'p25',mtof(83),t,.06,.12); tone(fx,'p25',mtof(88),t+.06,.25,.12,0,.2); };
+  // You took the crown: fanfare
+  const crown=()=>{
+    if(!ok()) return; const t=ac.currentTime;
+    [72,76,79,84].forEach((m,i)=>tone(fx,'p25',mtof(m),t+i*.07,i<3?.07:.3,.13,0,i<3?0:.3));
+    tone(fx,'triangle',mtof(60),t+.21,.3,.25,0,.4);
+  };
   function crash(vol){
-    if(!ac||muted) return;
-    const n=burst(.9,.9*vol,'lowpass',3500);
-    if(n){ n.f.frequency.setValueAtTime(3500,n.t0); n.f.frequency.exponentialRampToValueAtTime(180,n.t0+.7); }
-    const th=blip(150,.45,.9*vol,'sine');
-    if(th){ th.o.frequency.setValueAtTime(150,th.t0); th.o.frequency.exponentialRampToValueAtTime(38,th.t0+.35); }
-    burst(.25,.5*vol,'bandpass',600,.02);                                   // metal crunch
-    for(let i=0;i<5;i++) blip(rand(2400,5200),.07,.06*vol,'sine',rand(.05,.38));  // glass
+    if(!ok()) return; const t=ac.currentTime, me=vol>=1;
+    if(!me&&t-lastCrash<.08) return; lastCrash=t;
+    const d=me?.7:.3;
+    hiss(fx,t,d,.5*vol,1,.08);                                       // explosion: noise sweeping down
+    tone(fx,'square',300,t,d*.8,.16*vol,30,.2);
+    if(me) [67,66,65].forEach((m,i)=>tone(fx,'p25',mtof(m),t+.4+i*.2,i<2?.18:.45,.1,i<2?0:mtof(m)*.94,.3));   // wah-wah-waaah
   }
 
   function setMuted(m){
     muted=m; try{localStorage.setItem('cc_mute',m?'1':'0');}catch(e){}
-    if(master) master.gain.setTargetAtTime(m?0:.9,ac.currentTime,.05);
+    if(master) master.gain.setTargetAtTime(m?0:.8,ac.currentTime,.05);
     if(!m) init();
+  }
+  function setMusic(on){
+    musicOn=on; try{localStorage.setItem('cc_music',on?'1':'0');}catch(e){}
+    if(on) init();
   }
   document.addEventListener('visibilitychange',()=>{
     if(!ac) return;
     if(document.hidden) ac.suspend(); else if(!muted) ac.resume();
   });
-  return {init,drive,tick,tock,cancel,bump,crown,crash,setMuted,get muted(){return muted;}};
+  return {init,drive,tick,tock,cancel,bump,ko,crown,crash,setMuted,setMusic,get muted(){return muted;},get music(){return musicOn;}};
 })();
 
 /* ============ Input ============ */
@@ -1292,7 +1299,7 @@ function showKO(m){
   const mine=me&&m.by===me.idx, vict=me&&m.v===me.idx;
   const V=vict?'You':esc(m.vn), B=mine?'You':esc(m.bn);
   if(m.lead&&m.bn){ toast(`★ ${B} took down the leader ${vict?'(you)':V}!`,true); if(mine) SFX.crown(); }
-  else if(m.bn) toast(`${B} blocked ${V} out · ${esc(m.r)}`,mine);
+  else if(m.bn){ toast(`${B} ${pushOn?'shoved':'blocked'} ${V} out · ${esc(m.r)}`,mine); if(mine) SFX.ko(); }
   else if(m.lead) toast(`★ Leader ${V} is out · ${esc(m.r)}`);
   else if(!vict) toast(`${V} · ${esc(m.r)}`);
 }
@@ -1439,6 +1446,10 @@ const paintSnd=()=>{ sndBtn.textContent=SFX.muted?'Sound off':'Sound on'; sndBtn
 sndBtn.addEventListener('click',()=>{ SFX.setMuted(!SFX.muted); paintSnd(); sndBtn.blur(); });
 addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT') return; if(e.key==='m'||e.key==='M'){ SFX.setMuted(!SFX.muted); paintSnd(); } });
 paintSnd();
+const musBtn=$('mus');
+const paintMus=()=>{ musBtn.textContent=SFX.music?'Music on':'Music off'; musBtn.setAttribute('aria-pressed',String(SFX.music)); };
+musBtn.addEventListener('click',()=>{ SFX.setMusic(!SFX.music); paintMus(); musBtn.blur(); });
+paintMus();
 $('exit').addEventListener('click',e=>{ e.currentTarget.blur(); leaveGame(); });
 $('pushBtn').addEventListener('click',e=>{
   e.currentTarget.blur(); if(!isHost) return;
@@ -1463,7 +1474,7 @@ function frame(){
   const dt=step();
   hudTimer-=dt; if(hudTimer<=0){ updateHud(); hudTimer=.1; }
   boardTimer-=dt; if(boardTimer<=0){ renderBoard(); boardTimer=.25; }
-  SFX.drive(mode==='playing'&&!!me&&me.state!=='dead', inp.x, inp.y);
+  SFX.drive(mode==='playing'&&!!me&&me.state!=='dead');
   updateCamera(dt); render();
 }
 requestAnimationFrame(frame);
