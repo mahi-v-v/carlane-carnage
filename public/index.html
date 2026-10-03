@@ -689,8 +689,8 @@ const SFX=(()=>{
     if(!ok()) return; const t=ac.currentTime, me=vol>=1;
     if(!me&&t-lastCrash<.08) return; lastCrash=t;
     const d=me?.7:.3;
-    hiss(fx,t,d,.5*vol,1,.08);                                       // explosion: noise sweeping down
-    tone(fx,'square',300,t,d*.8,.16*vol,30,.2);
+    hiss(fx,t,d,.22*vol,1,.08);                                      // explosion: noise sweeping down
+    tone(fx,'square',300,t,d*.8,.08*vol,30,.2);
     if(me) [67,66,65].forEach((m,i)=>tone(fx,'p25',mtof(m),t+.4+i*.2,i<2?.18:.45,.1,i<2?0:mtof(m)*.94,.3));   // wah-wah-waaah
   }
 
